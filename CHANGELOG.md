@@ -7,6 +7,9 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - The window opens on the monitor under the mouse pointer (#25)
 - Application icon in the window and taskbar, PNG 16–512 px (#40)
 
+### Changed
+- README describes what works now, the roadmap, keys and known issues (#41)
+
 ## [0.0.1] - Phase 1
 ### Added
 - Gradle project (Java 21, JavaFX 21), Gradle wrapper
