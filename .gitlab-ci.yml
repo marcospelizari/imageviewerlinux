@@ -1,0 +1,33 @@
+# Runs on every push and merge request. `main` should be protected so merges need a green pipeline.
+image: eclipse-temurin:21-jdk
+
+variables:
+  GRADLE_USER_HOME: "$CI_PROJECT_DIR/.gradle"
+  GRADLE_OPTS: "-Dorg.gradle.daemon=false"
+
+cache:
+  key:
+    files:
+      - gradle/wrapper/gradle-wrapper.properties
+      - build.gradle
+  paths:
+    - .gradle/caches/
+    - .gradle/wrapper/
+
+stages:
+  - build
+  - test
+
+build:
+  stage: build
+  script:
+    - ./gradlew assemble --console=plain
+
+test:
+  stage: test
+  script:
+    - ./gradlew test --console=plain
+  artifacts:
+    when: always
+    reports:
+      junit: build/test-results/test/TEST-*.xml
