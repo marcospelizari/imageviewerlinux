@@ -58,24 +58,27 @@ public final class Zoom {
     /** Zoom steps for + / −, in %, from {@link #MIN_PERCENT} to {@link #MAX_PERCENT}. */
     static final double[] STEPS = {1, 2, 3, 5, 8, 10, 15, 20, 25, 33, 50, 67, 75, 100, 125, 150, 200};
 
-    /** The next step above {@code scale}, or the largest one. */
+    /** The next step above {@code scale}; {@code scale} itself when there is none, so + never shrinks. */
     static double zoomIn(double scale) {
         for (double step : STEPS) {
             if (step / 100 > scale * (1 + 1e-9)) {
                 return step / 100;
             }
         }
-        return STEPS[STEPS.length - 1] / 100;
+        return scale;
     }
 
-    /** The next step below {@code scale}, or the smallest one. */
+    /**
+     * The next step below {@code scale}; {@code scale} itself when there is none, so − never enlarges, e.g. a
+     * fit below 1% (#47).
+     */
     static double zoomOut(double scale) {
         for (int i = STEPS.length - 1; i >= 0; i--) {
             if (STEPS[i] / 100 < scale * (1 - 1e-9)) {
                 return STEPS[i] / 100;
             }
         }
-        return STEPS[0] / 100;
+        return scale;
     }
 
     /**

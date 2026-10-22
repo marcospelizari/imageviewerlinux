@@ -105,6 +105,8 @@ class ZoomTest {
         assertEquals(Zoom.MAX_PERCENT, Zoom.STEPS[Zoom.STEPS.length - 1]);
         assertEquals(Zoom.MIN_PERCENT, Zoom.STEPS[0]);
         assertEquals(0.01, Zoom.zoomOut(0.01), EPS);
+        assertEquals(0.006, Zoom.zoomOut(0.006), EPS);   // a fit below 1% stays: − never enlarges (#47)
+        assertEquals(2.5, Zoom.zoomIn(2.5), EPS);         // + never shrinks
     }
 
     @Test

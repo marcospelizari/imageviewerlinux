@@ -495,6 +495,28 @@ class ViewerControllerTest {
         assertEquals("c.jpg — 3/3 — linview", title);
     }
 
+    /** #47: a half notch of Ctrl + wheel must not count towards navigating, nor the other way round. */
+    @Test
+    void zoomAndNavigateDoNotShareWheelLeftovers() {
+        settings.setWheel(Settings.Wheel.NAVIGATE);
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);
+        controller.zoomWheel(-0.6, 960, 540);   // towards zoom out, not a whole notch
+        controller.wheel(0, -0.5);              // towards next: together they would make one notch
+        assertEquals("a.jpg — 1/3 — 3840×2160 — 50% — linview", title);
+        controller.zoomWheel(-0.5, 960, 540);
+        assertEquals(0.5, shownView.scale(), 1e-9);
+    }
+
+    @Test
+    void zoomOutNeverEnlargesAFitBelowOnePercent() {
+        controller.open(folder);
+        lastLoad().finish(320_000, 1000);   // fit: 0.6%
+        double fit = shownView.scale();
+        controller.zoomOut();
+        assertEquals(fit, shownView.scale(), 1e-12);
+    }
+
     @Test
     void ctrlWheelZoomsWhateverTheSetting() {
         settings.setWheel(Settings.Wheel.NAVIGATE);
