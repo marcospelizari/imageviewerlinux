@@ -15,7 +15,7 @@ public final class Keys {
 
     public enum Action {
         NEXT, PREVIOUS, FIRST, LAST, OPEN, FULL_SCREEN, ESCAPE,
-        ZOOM_IN, ZOOM_OUT, FIT, FIT_WIDTH, ACTUAL_SIZE, FIT_OR_ACTUAL
+        ZOOM_IN, ZOOM_OUT, FIT, FIT_WIDTH, ACTUAL_SIZE, FIT_OR_ACTUAL, ZOOM_LOCK
     }
 
     private record Key(KeyCode code, boolean ctrl, boolean shift) {
@@ -51,7 +51,8 @@ public final class Keys {
             entry(new Key(KeyCode.W, false), Action.FIT_WIDTH),
             entry(new Key(KeyCode.A, false), Action.FIT_OR_ACTUAL),
             entry(new Key(KeyCode.DIGIT1, false), Action.ACTUAL_SIZE),
-            entry(new Key(KeyCode.NUMPAD1, false), Action.ACTUAL_SIZE));
+            entry(new Key(KeyCode.NUMPAD1, false), Action.ACTUAL_SIZE),
+            entry(new Key(KeyCode.L, true, true), Action.ZOOM_LOCK));   // FastStone: "Lock zoom ratio"
 
     private Keys() {
     }

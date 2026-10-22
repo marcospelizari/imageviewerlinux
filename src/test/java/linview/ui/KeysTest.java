@@ -65,6 +65,9 @@ class KeysTest {
         assertEquals(Action.ACTUAL_SIZE, plain(KeyCode.NUMPAD1));
         assertNull(Keys.actionFor(KeyCode.B, false, true, false));   // Shift only where listed
         assertNull(plain(KeyCode.H));   // fit height has no key (Marcos, 2026-10-22)
+        assertEquals(Action.ZOOM_LOCK, Keys.actionFor(KeyCode.L, true, true, false));   // R-ZOOM-02, FastStone
+        assertNull(plain(KeyCode.L));
+        assertNull(Keys.actionFor(KeyCode.L, true, false, false));
     }
 
     @Test
