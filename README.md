@@ -2,16 +2,15 @@
 
 A fast image viewer for Linux, inspired by FastStone Image Viewer.
 
-**Status:** early development. It opens and shows one image; moving to the next image comes next.
+**Status:** early development. It opens a folder and moves through its images; zoom comes next.
 
 ## What works now
 - Open an image or a folder from the command line, or with Ctrl+O. Opening an image makes its folder the list.
+- Move through the folder with the keyboard; it stops at the first and last image
 - JPEG, PNG, GIF and BMP, centred and fitted to the window (small images are not enlarged)
+- Photos are turned upright using their EXIF orientation
 - Window title shows the file name, its position in the folder and the image size
 - The window opens on the monitor under the mouse pointer; Enter toggles full-screen
-
-### Known issues
-- Full-screen doesn't work yet on the second monitor of a dual-monitor setup.
 
 ## Roadmap
 | Version | Contents |
@@ -40,9 +39,29 @@ so new windows open on the monitor with the mouse pointer.
 ## Keys
 | Key | Action |
 |---|---|
+| → PgDn Space | Next image |
+| ← PgUp Backspace | Previous image |
+| Home / End | First / last image |
 | Ctrl+O or O | Open an image |
-| Enter | Full-screen on/off |
+| Enter, F11 or double-click | Full-screen on/off |
 | Esc | Leave full-screen; quit from a window |
+
+## Settings
+Settings are kept in `~/.config/linview/settings.properties` (or `$XDG_CONFIG_HOME/linview/`).
+The file is optional: missing keys use the default, and an invalid value uses the default and logs a warning.
+Edit it while linview is closed. Most settings are used by features that are still being built.
+
+| Key | Values | Default |
+|---|---|---|
+| `zoom.mode` | `fit`, `width`, `height`, `actual`, `lock` | `fit` |
+| `zoom.percent` | zoom % used by `lock`, 1–3200 | `100` |
+| `zoom.enlargeSmall` | `true` / `false`: enlarge images smaller than the screen | `false` |
+| `wheel` | `scroll` (wheel scrolls the image) / `navigate` (next/previous image) | `scroll` |
+| `background` | `black`, `darkgrey`, `grey`, `white` or `#RRGGBB` | `black` |
+| `overlay.fileName` | `true` / `false`: file name in full-screen | `true` |
+| `start.fullScreen` | `true` / `false`: start in full-screen (last-used mode) | `false` |
+| `window.x`, `window.y` | window position; empty = the monitor under the mouse pointer | empty |
+| `window.width`, `window.height` | window size, at least 200 | `1024`, `700` |
 
 ## License
 GPL-3.0 — see [LICENSE](LICENSE).

@@ -15,8 +15,8 @@ import javafx.geometry.Point2D;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
-import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyEvent;
+import javafx.scene.input.MouseButton;
 import javafx.scene.robot.Robot;
 import javafx.stage.FileChooser;
 import javafx.stage.Screen;
@@ -24,7 +24,7 @@ import javafx.stage.Stage;
 
 /**
  * Entry point: opens the file or folder given on the command line (or with Ctrl+O) and shows its image (R-NAV-01).
- * Enter toggles full-screen, Esc quits.
+ * Keys are in {@link Keys}.
  */
 public class App extends Application {
 
@@ -45,7 +45,11 @@ public class App extends Application {
         return name + " \u2014 " + position + "/" + size + dimensions + " \u2014 " + TITLE;
     }
 
+    private static final System.Logger LOG = System.getLogger("linview");
+
     private final ViewerPane viewer = new ViewerPane();
+    /** Loaded at start (R-SET-01); each feature that changes a setting saves it with {@link Settings#save}. */
+    private Settings settings;
     private Stage stage;
     /** The open folder; {@code null} when nothing is open. */
     private ImageList images;
@@ -55,8 +59,14 @@ public class App extends Application {
     @Override
     public void start(Stage stage) {
         this.stage = stage;
+        settings = Settings.load(Settings.defaultFile(), warning -> LOG.log(System.Logger.Level.WARNING, warning));
         Scene scene = new Scene(viewer, 1024, 700);
         scene.setOnKeyPressed(this::keyPressed);
+        scene.setOnMouseClicked(e -> {
+            if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) {
+                toggleFullScreen();
+            }
+        });
 
         stage.setFullScreenExitHint("");
         stage.setTitle(TITLE);
@@ -76,12 +86,36 @@ public class App extends Application {
     }
 
     private void keyPressed(KeyEvent e) {
-        if (e.getCode() == KeyCode.ENTER) {
-            stage.setFullScreen(!stage.isFullScreen());
-        } else if (e.getCode() == KeyCode.ESCAPE && !stage.isFullScreen()) {
-            stage.close();
-        } else if (e.getCode() == KeyCode.O && !e.isAltDown() && !e.isShiftDown()) {
-            chooseAndOpen();
+        Keys.Action action = Keys.actionFor(e);
+        if (action == null) {
+            return;
+        }
+        switch (action) {
+            case NEXT -> moveTo(images == null ? null : images.next());
+            case PREVIOUS -> moveTo(images == null ? null : images.previous());
+            case FIRST -> moveTo(images == null ? null : images.first());
+            case LAST -> moveTo(images == null ? null : images.last());
+            case OPEN -> chooseAndOpen();
+            case FULL_SCREEN -> toggleFullScreen();
+            case ESCAPE -> {
+                // In full-screen JavaFX itself leaves full-screen on Esc.
+                if (!stage.isFullScreen()) {
+                    stage.close();
+                }
+            }
+        }
+    }
+
+    /** Enter, F11 or a double-click (R-VIEW-02). */
+    private void toggleFullScreen() {
+        stage.setFullScreen(!stage.isFullScreen());
+    }
+
+    /** Shows {@code moved} unless it's the image already shown (end of the folder, or nothing open). */
+    private void moveTo(ImageList moved) {
+        if (moved != null && moved != images) {
+            images = moved;
+            showCurrent();
         }
     }
 
@@ -146,23 +180,31 @@ public class App extends Application {
         String name = file.getFileName().toString();
         stage.setTitle(title(name, images.position(), images.size(), 0, 0));
 
+        Orientation orientation = Orientation.read(file);
         // Background loading keeps the window responsive; the result arrives through the listeners.
+        Image previous = current;
         Image image = new Image(file.toUri().toString(), true);
         current = image;
-        image.progressProperty().addListener((obs, old, now) -> loaded(image, name));
-        image.errorProperty().addListener((obs, old, now) -> loaded(image, name));
-        loaded(image, name);
+        if (previous != null) {
+            previous.cancel();   // stop decoding an image no longer wanted (fast key presses); set current first so it's ignored
+        }
+        image.progressProperty().addListener((obs, old, now) -> loaded(image, name, orientation));
+        image.errorProperty().addListener((obs, old, now) -> loaded(image, name, orientation));
+        loaded(image, name, orientation);
     }
 
-    private void loaded(Image image, String name) {
+    private void loaded(Image image, String name, Orientation orientation) {
         if (image != current) {
             return;
         }
         if (image.isError()) {
             viewer.showMessage("Can't show " + name + ": the file is damaged or not a supported image");
         } else if (image.getProgress() >= 1 && image.getWidth() > 0) {
-            stage.setTitle(title(name, images.position(), images.size(), image.getWidth(), image.getHeight()));
-            viewer.show(image);
+            boolean swap = orientation.swapsSides();
+            double width = swap ? image.getHeight() : image.getWidth();
+            double height = swap ? image.getWidth() : image.getHeight();
+            stage.setTitle(title(name, images.position(), images.size(), width, height));
+            viewer.show(image, orientation);
         }
     }
 

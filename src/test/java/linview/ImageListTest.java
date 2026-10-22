@@ -1,6 +1,7 @@
 package linview;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -116,6 +117,37 @@ class ImageListTest {
 
         assertEquals("img2.jpg", list.current().getFileName().toString());
         assertEquals(1, list.position());
+    }
+
+    /** R-NAV-03, R-NAV-04: next/previous/first/last, stopping at the ends. */
+    @Test
+    void navigatesAndStopsAtTheEnds() throws IOException {
+        for (String name : List.of("img1.jpg", "img2.jpg", "img10.jpg")) {
+            Files.createFile(folder.resolve(name));
+        }
+        ImageList list = ImageList.open(folder.resolve("img2.jpg"));
+
+        assertEquals(3, list.next().position());
+        assertEquals(1, list.previous().position());
+        assertEquals(1, list.first().position());
+        assertEquals(3, list.last().position());
+
+        ImageList last = list.last();
+        assertSame(last, last.next(), "next at the last image stays there");
+        assertSame(last, last.last());
+        ImageList first = list.first();
+        assertSame(first, first.previous(), "previous at the first image stays there");
+        assertSame(first, first.first());
+    }
+
+    @Test
+    void navigatingAnEmptyListDoesNothing() throws IOException {
+        ImageList empty = ImageList.open(folder);
+
+        assertSame(empty, empty.next());
+        assertSame(empty, empty.previous());
+        assertSame(empty, empty.first());
+        assertSame(empty, empty.last());
     }
 
     @Test
