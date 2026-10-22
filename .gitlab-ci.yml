@@ -14,6 +14,10 @@ cache:
     - .gradle/caches/
     - .gradle/wrapper/
 
+# A newer push cancels a superseded pipeline (with "Auto-cancel redundant pipelines" on in the project settings).
+default:
+  interruptible: true
+
 stages:
   - build
   - test
@@ -29,5 +33,8 @@ test:
     - ./gradlew test --console=plain
   artifacts:
     when: always
+    expire_in: 1 week
+    paths:
+      - build/reports/tests/test/   # HTML report with the full output of each test
     reports:
       junit: build/test-results/test/TEST-*.xml
