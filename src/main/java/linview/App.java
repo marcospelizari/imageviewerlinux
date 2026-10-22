@@ -39,15 +39,19 @@ public class App extends Application {
         return "/linview/icons/linview-" + size + ".png";
     }
 
-    /** {@code name — n/N — W×H — linview}; the size is left out while it isn't known yet ({@code width <= 0}). */
-    static String title(String name, int position, int size, double width, double height) {
+    /**
+     * {@code name — n/N — W×H — zoom% — linview}; size and zoom are left out while they aren't known yet
+     * ({@code width <= 0}, {@code scale <= 0}).
+     */
+    static String title(String name, int position, int size, double width, double height, double scale) {
         String dimensions = width > 0 ? String.format(" \u2014 %.0f\u00d7%.0f", width, height) : "";
-        return name + " \u2014 " + position + "/" + size + dimensions + " \u2014 " + TITLE;
+        String zoom = scale > 0 ? " \u2014 " + Math.round(scale * 100) + "%" : "";
+        return name + " \u2014 " + position + "/" + size + dimensions + zoom + " \u2014 " + TITLE;
     }
 
     private static final System.Logger LOG = System.getLogger("linview");
 
-    private final ViewerPane viewer = new ViewerPane();
+    private ViewerPane viewer;
     /** Loaded at start (R-SET-01); each feature that changes a setting saves it with {@link Settings#save}. */
     private Settings settings;
     private Stage stage;
@@ -60,6 +64,8 @@ public class App extends Application {
     public void start(Stage stage) {
         this.stage = stage;
         settings = Settings.load(Settings.defaultFile(), warning -> LOG.log(System.Logger.Level.WARNING, warning));
+        viewer = new ViewerPane(settings);
+        viewer.scaleProperty().addListener((obs, old, now) -> showTitle());
         Scene scene = new Scene(viewer, 1024, 700);
         scene.setOnKeyPressed(this::keyPressed);
         scene.setOnMouseClicked(e -> {
@@ -97,11 +103,31 @@ public class App extends Application {
             case LAST -> moveTo(images == null ? null : images.last());
             case OPEN -> chooseAndOpen();
             case FULL_SCREEN -> toggleFullScreen();
+            case ZOOM_IN -> viewer.zoomIn();
+            case ZOOM_OUT -> viewer.zoomOut();
+            case FIT -> setZoomMode(Zoom.Mode.FIT);
+            case FIT_WIDTH -> setZoomMode(Zoom.Mode.WIDTH);
+            case ACTUAL_SIZE -> setZoomMode(Zoom.Mode.ACTUAL);
+            case FIT_OR_ACTUAL -> setZoomMode(settings.zoomMode == Zoom.Mode.ACTUAL ? Zoom.Mode.FIT : Zoom.Mode.ACTUAL);
             case ESCAPE -> {
                 // In full-screen JavaFX itself leaves full-screen on Esc.
                 if (!stage.isFullScreen()) {
                     stage.close();
                 }
+            }
+        }
+    }
+
+    /** Pressing the current mode's key again drops a + / − zoom; a new mode is saved (R-SET-01). */
+    private void setZoomMode(Zoom.Mode mode) {
+        boolean changed = settings.zoomMode != mode;
+        settings.zoomMode = mode;
+        viewer.applyMode();
+        if (changed) {
+            try {
+                settings.save(Settings.defaultFile());
+            } catch (IOException e) {
+                LOG.log(System.Logger.Level.WARNING, "Can't save the settings: " + e.getMessage());
             }
         }
     }
@@ -178,7 +204,7 @@ public class App extends Application {
     private void showCurrent() {
         Path file = images.current();
         String name = file.getFileName().toString();
-        stage.setTitle(title(name, images.position(), images.size(), 0, 0));
+        stage.setTitle(title(name, images.position(), images.size(), 0, 0, 0));
 
         Orientation orientation = Orientation.read(file);
         // Background loading keeps the window responsive; the result arrives through the listeners.
@@ -200,12 +226,19 @@ public class App extends Application {
         if (image.isError()) {
             viewer.showMessage("Can't show " + name + ": the file is damaged or not a supported image");
         } else if (image.getProgress() >= 1 && image.getWidth() > 0) {
-            boolean swap = orientation.swapsSides();
-            double width = swap ? image.getHeight() : image.getWidth();
-            double height = swap ? image.getWidth() : image.getHeight();
-            stage.setTitle(title(name, images.position(), images.size(), width, height));
             viewer.show(image, orientation);
+            showTitle();
         }
+    }
+
+    /** Title for the image on screen; while the next one is still loading its own title stays. */
+    private void showTitle() {
+        if (current == null || viewer.image() != current) {
+            return;
+        }
+        String name = images.current().getFileName().toString();
+        stage.setTitle(title(name, images.position(), images.size(),
+                viewer.uprightWidth(), viewer.uprightHeight(), viewer.scaleProperty().get()));
     }
 
     /** Without an explicit position JavaFX centres on the primary monitor; use the mouse's monitor instead. */

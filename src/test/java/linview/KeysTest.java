@@ -47,6 +47,24 @@ class KeysTest {
         assertEquals(Action.ESCAPE, plain(KeyCode.ESCAPE));
     }
 
+    /** R-ZOOM-01: + is Shift+= on most layouts, so Shift is accepted there; the keypad works too. */
+    @Test
+    void zoomKeys() {
+        assertEquals(Action.ZOOM_IN, plain(KeyCode.PLUS));
+        assertEquals(Action.ZOOM_IN, Keys.actionFor(KeyCode.EQUALS, false, true, false));
+        assertEquals(Action.ZOOM_IN, Keys.actionFor(KeyCode.PLUS, false, true, false));
+        assertEquals(Action.ZOOM_IN, plain(KeyCode.ADD));
+        assertEquals(Action.ZOOM_OUT, plain(KeyCode.MINUS));
+        assertEquals(Action.ZOOM_OUT, plain(KeyCode.SUBTRACT));
+        assertEquals(Action.FIT, plain(KeyCode.B));
+        assertEquals(Action.FIT_WIDTH, plain(KeyCode.W));
+        assertEquals(Action.FIT_OR_ACTUAL, plain(KeyCode.A));
+        assertEquals(Action.ACTUAL_SIZE, plain(KeyCode.DIGIT1));
+        assertEquals(Action.ACTUAL_SIZE, plain(KeyCode.NUMPAD1));
+        assertNull(Keys.actionFor(KeyCode.B, false, true, false));   // Shift only where listed
+        assertNull(plain(KeyCode.H));   // fit height has no key (Marcos, 2026-10-22)
+    }
+
     @Test
     void otherKeysAndModifiersDoNothing() {
         assertNull(plain(KeyCode.Q));

@@ -19,8 +19,6 @@ import java.util.regex.Pattern;
  */
 final class Settings {
 
-    enum ZoomMode { FIT, WIDTH, HEIGHT, ACTUAL, LOCK }
-
     enum Wheel { SCROLL, NAVIGATE }
 
     static final List<String> BACKGROUND_PRESETS = List.of("black", "darkgrey", "grey", "white");
@@ -31,8 +29,8 @@ final class Settings {
     /** Smallest window that is still usable; anything smaller in the file is ignored. */
     static final int MIN_WINDOW = 200;
 
-    ZoomMode zoomMode = ZoomMode.FIT;
-    /** The locked zoom %, used when {@link #zoomMode} is {@link ZoomMode#LOCK} (R-ZOOM-02). */
+    Zoom.Mode zoomMode = Zoom.Mode.FIT;
+    /** The locked zoom %, used when {@link #zoomMode} is {@link Zoom.Mode#LOCK} (R-ZOOM-02). */
     double zoomPercent = 100;
     boolean enlargeSmall = false;
     Wheel wheel = Wheel.SCROLL;
@@ -69,7 +67,7 @@ final class Settings {
             return settings;
         }
 
-        settings.zoomMode = choice(p, "zoom.mode", ZoomMode.class, settings.zoomMode, warn);
+        settings.zoomMode = choice(p, "zoom.mode", Zoom.Mode.class, settings.zoomMode, warn);
         settings.zoomPercent = number(p, "zoom.percent", MIN_PERCENT, MAX_PERCENT, settings.zoomPercent, warn);
         settings.enlargeSmall = flag(p, "zoom.enlargeSmall", settings.enlargeSmall, warn);
         settings.wheel = choice(p, "wheel", Wheel.class, settings.wheel, warn);

@@ -26,7 +26,7 @@ class SettingsTest {
     }
 
     private static void assertDefaults(Settings s) {
-        assertEquals(Settings.ZoomMode.FIT, s.zoomMode);
+        assertEquals(Zoom.Mode.FIT, s.zoomMode);
         assertEquals(100, s.zoomPercent);
         assertFalse(s.enlargeSmall);
         assertEquals(Settings.Wheel.SCROLL, s.wheel);
@@ -54,7 +54,7 @@ class SettingsTest {
     @Test
     void savedValuesLoadBack(@TempDir Path folder) throws IOException {
         Settings s = new Settings();
-        s.zoomMode = Settings.ZoomMode.LOCK;
+        s.zoomMode = Zoom.Mode.LOCK;
         s.zoomPercent = 52.5;
         s.enlargeSmall = true;
         s.wheel = Settings.Wheel.NAVIGATE;
@@ -70,7 +70,7 @@ class SettingsTest {
         s.save(file);
         Settings loaded = load(file);
 
-        assertEquals(Settings.ZoomMode.LOCK, loaded.zoomMode);
+        assertEquals(Zoom.Mode.LOCK, loaded.zoomMode);
         assertEquals(52.5, loaded.zoomPercent);
         assertTrue(loaded.enlargeSmall);
         assertEquals(Settings.Wheel.NAVIGATE, loaded.wheel);
@@ -117,7 +117,7 @@ class SettingsTest {
         Path file = Files.writeString(folder.resolve("settings.properties"),
                 "zoom.mode = Width \nwheel=NAVIGATE\nbackground= DarkGrey\nzoom.enlargeSmall=TRUE\n");
         Settings s = load(file);
-        assertEquals(Settings.ZoomMode.WIDTH, s.zoomMode);
+        assertEquals(Zoom.Mode.WIDTH, s.zoomMode);
         assertEquals(Settings.Wheel.NAVIGATE, s.wheel);
         assertEquals("darkgrey", s.background);
         assertTrue(s.enlargeSmall);
