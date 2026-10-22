@@ -25,6 +25,9 @@ public final class ViewerController<I> {
 
     public static final String OPEN_HINT = "Press Ctrl+O to open an image or folder";
 
+    /** One wheel notch scrolls this part of the window height (decided 2026-10-22). */
+    static final double SCROLL_STEP = 0.1;
+
     /**
      * Loads image files. Every implementation (the JavaFX loader, test fakes, later the cache) keeps this contract:
      * <ul>
@@ -78,6 +81,8 @@ public final class ViewerController<I> {
     private boolean zoomedByHand;
     /** True after a drag: a resize keeps the place, not only the start position (R-ZOOM-05). */
     private boolean pannedByHand;
+    /** Wheel movement not yet a whole notch: a touchpad sends many small ones. */
+    private double wheelRest;
     /** Where Ctrl+Shift+L returns to; fit after a restart with the lock on. */
     private Zoom.Mode modeBeforeLock = Zoom.Mode.FIT;
     private double viewWidth;
@@ -207,9 +212,55 @@ public final class ViewerController<I> {
         if (view == null || !canLayOut()) {
             return;
         }
-        pannedByHand = true;
-        place(Zoom.around(new Zoom.View(view.scale(), view.x() + dx, view.y() + dy), view.scale(), 0, 0,
-                shown.uprightWidth(), shown.uprightHeight(), viewWidth, viewHeight));
+        Zoom.View moved = Zoom.around(new Zoom.View(view.scale(), view.x() + dx, view.y() + dy), view.scale(),
+                0, 0, shown.uprightWidth(), shown.uprightHeight(), viewWidth, viewHeight);
+        if (!moved.equals(view)) {   // nothing to move: keep the start position for a resize
+            pannedByHand = true;
+            place(moved);
+        }
+    }
+
+    /**
+     * The wheel without Ctrl (R-WHEEL-01), in notches; positive = wheel up / left. {@code scroll} moves the image
+     * and stops at its edges; {@code navigate} goes to the previous (up) or next (down) image.
+     */
+    public void wheel(double notchesX, double notchesY) {
+        if (settings.wheel() == Settings.Wheel.NAVIGATE) {
+            int whole = wholeNotches(notchesY);
+            for (int i = 0; i < Math.abs(whole); i++) {
+                if (whole > 0) {
+                    previous();
+                } else {
+                    next();
+                }
+            }
+            return;
+        }
+        double step = viewHeight * SCROLL_STEP;
+        pan(notchesX * step, notchesY * step);
+    }
+
+    /** Ctrl + wheel (R-ZOOM-05): one zoom step per notch at ({@code x}, {@code y}); positive = in. */
+    public void zoomWheel(double notches, double x, double y) {
+        int whole = wholeNotches(notches);
+        for (int i = 0; i < Math.abs(whole); i++) {
+            if (whole > 0) {
+                zoomInAt(x, y);
+            } else {
+                zoomOutAt(x, y);
+            }
+        }
+    }
+
+    /** Adds {@code notches} to what's left over and takes out the whole ones; turning back drops the rest. */
+    private int wholeNotches(double notches) {
+        if (wheelRest * notches < 0) {
+            wheelRest = 0;
+        }
+        wheelRest += notches;
+        int whole = (int) wheelRest;
+        wheelRest -= whole;
+        return whole;
     }
 
     /**
