@@ -2,7 +2,7 @@
 
 A fast image viewer for Linux, inspired by FastStone Image Viewer.
 
-**Status:** early development. It opens a folder, moves through its images and zooms, with zoom lock; panning comes next.
+**Status:** early development. It opens a folder, moves through its images, zooms (also at the mouse pointer) with zoom lock, and drags large images.
 
 ## What works now
 - Open an image or a folder from the command line, or with Ctrl+O. Opening an image makes its folder the list.
@@ -10,6 +10,7 @@ A fast image viewer for Linux, inspired by FastStone Image Viewer.
 - JPEG, PNG, GIF and BMP
 - Zoom modes: fit, fit width and actual size (fit height only through the settings file for now); the mode is remembered. An image larger than the window opens at its top (top-centre if also wider); fit only shrinks, so an image smaller than the window keeps its size
 - + / − zoom the image on screen; the next image opens in the zoom mode again
+- Ctrl + mouse wheel zooms at the mouse pointer; drag with the left button to move an image larger than the window (grab-hand cursor). Resizing the window or switching full-screen keeps your place
 - Zoom lock (Ctrl+Shift+L): every next image opens at the same zoom %, at its top; + / − change the locked %. Remembered after a restart
 - Photos are turned upright using their EXIF orientation
 - Window title shows the file name, its position in the folder, the image size and the zoom %
@@ -49,6 +50,8 @@ so new windows open on the monitor with the mouse pointer.
 | Enter, F11 or double-click | Full-screen on/off |
 | Esc | Leave full-screen; quit from a window |
 | + / − | Zoom in / out (keypad too) |
+| Ctrl + mouse wheel | Zoom in / out at the mouse pointer |
+| Drag (left button) | Move an image larger than the window |
 | B | Fit to window |
 | W | Fit width |
 | A | Fit to window ↔ actual size (100%) |

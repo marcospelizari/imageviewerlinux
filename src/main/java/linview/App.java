@@ -68,6 +68,7 @@ public class App extends Application {
                 stage.setTitle(title);
             }
         });
+        viewer.sendGesturesTo(controller);
         InvalidationListener resized = obs -> controller.resize(viewer.getWidth(), viewer.getHeight());
         viewer.widthProperty().addListener(resized);
         viewer.heightProperty().addListener(resized);
@@ -75,7 +76,8 @@ public class App extends Application {
         Scene scene = new Scene(viewer, 1024, 700);
         scene.setOnKeyPressed(this::keyPressed);
         scene.setOnMouseClicked(e -> {
-            if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2) {
+            // A drag that ends where it started is not a click (R-ZOOM-05).
+            if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2 && e.isStillSincePress()) {
                 toggleFullScreen();
             }
         });
