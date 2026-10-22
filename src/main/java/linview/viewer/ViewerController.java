@@ -50,12 +50,13 @@ public final class ViewerController<I> {
     }
 
     /**
-     * {@code name — n/N — W×H — zoom% — linview}; size and zoom are left out while they aren't known yet
-     * ({@code width <= 0}, {@code scale <= 0}).
+     * {@code name — n/N — W×H — zoom% — linview}, with {@code (locked)} after the zoom while zoom lock is on;
+     * size and zoom are left out while they aren't known yet ({@code width <= 0}, {@code scale <= 0}).
      */
-    static String title(String name, int position, int size, double width, double height, double scale) {
+    static String title(String name, int position, int size, double width, double height, double scale,
+                        boolean locked) {
         String dimensions = width > 0 ? String.format(" — %.0f×%.0f", width, height) : "";
-        String zoom = scale > 0 ? " — " + Math.round(scale * 100) + "%" : "";
+        String zoom = scale > 0 ? " — " + Math.round(scale * 100) + "%" + (locked ? " (locked)" : "") : "";
         return name + " — " + position + "/" + size + dimensions + zoom + " — " + TITLE;
     }
 
@@ -75,6 +76,8 @@ public final class ViewerController<I> {
     private Zoom.View view;
     /** True after + / −: a resize keeps that zoom; the next image starts from the mode again (R-ZOOM-01). */
     private boolean zoomedByHand;
+    /** Where Ctrl+Shift+L returns to; fit after a restart with the lock on. */
+    private Zoom.Mode modeBeforeLock = Zoom.Mode.FIT;
     private double viewWidth;
     private double viewHeight;
 
@@ -154,12 +157,35 @@ public final class ViewerController<I> {
         setZoomMode(settings.zoomMode() == Zoom.Mode.ACTUAL ? Zoom.Mode.FIT : Zoom.Mode.ACTUAL);
     }
 
+    /**
+     * Ctrl+Shift+L (R-ZOOM-02): locks the zoom of the image on screen, so every next image opens at the same %;
+     * pressed again, returns to the mode before. The lock is saved. Nothing to lock while no image is shown.
+     */
+    public void toggleZoomLock() {
+        if (settings.zoomMode() == Zoom.Mode.LOCK) {
+            setZoomMode(modeBeforeLock);
+            return;
+        }
+        if (view == null || !canLayOut()) {
+            return;
+        }
+        modeBeforeLock = settings.zoomMode();
+        double percent = Math.max(Zoom.MIN_PERCENT, Math.min(Zoom.MAX_PERCENT, percentOf(view.scale())));
+        settings.setZoomPercent(percent);
+        settings.setZoomMode(Zoom.Mode.LOCK);
+        store.save(settings);
+        zoomTo(percent / 100);
+    }
+
+    /** Without zoom lock only the image on screen changes; with it, the locked % changes too and is saved. */
     public void zoomIn() {
         zoomTo(view == null ? 0 : Zoom.zoomIn(view.scale()));
+        saveLockedZoom();
     }
 
     public void zoomOut() {
         zoomTo(view == null ? 0 : Zoom.zoomOut(view.scale()));
+        saveLockedZoom();
     }
 
     /** The window's image area changed size: fit modes follow it; a + / − zoom is kept and only tidied. */
@@ -195,7 +221,7 @@ public final class ViewerController<I> {
     /** Starts loading the current image; the one on screen stays until the new one is ready. */
     private void showCurrent() {
         Path file = images.current();
-        display.showTitle(title(file.getFileName().toString(), images.position(), images.size(), 0, 0, 0));
+        display.showTitle(title(file.getFileName().toString(), images.position(), images.size(), 0, 0, 0, false));
         // The new request is current before loading starts, so a result that arrives at once is accepted and a
         // late one for the previous image is ignored.
         long id = ++request;
@@ -241,6 +267,22 @@ public final class ViewerController<I> {
                 shown.uprightWidth(), shown.uprightHeight(), viewWidth, viewHeight));
     }
 
+    private void saveLockedZoom() {
+        if (settings.zoomMode() != Zoom.Mode.LOCK || view == null) {
+            return;
+        }
+        double percent = percentOf(view.scale());
+        if (settings.zoomPercent() != percent) {
+            settings.setZoomPercent(percent);
+            store.save(settings);
+        }
+    }
+
+    /** Scale as %, to two decimals, so the settings file says 67 rather than 67.00000000000001. */
+    private static double percentOf(double scale) {
+        return Math.round(scale * 10_000) / 100.0;
+    }
+
     private boolean canLayOut() {
         return shown != null && viewWidth > 0 && viewHeight > 0;
     }
@@ -252,7 +294,7 @@ public final class ViewerController<I> {
         if (shownRequest == request) {
             Path file = images.current();
             display.showTitle(title(file.getFileName().toString(), images.position(), images.size(),
-                    shown.uprightWidth(), shown.uprightHeight(), v.scale()));
+                    shown.uprightWidth(), shown.uprightHeight(), v.scale(), settings.zoomMode() == Zoom.Mode.LOCK));
         }
     }
 }

@@ -2,7 +2,7 @@
 
 A fast image viewer for Linux, inspired by FastStone Image Viewer.
 
-**Status:** early development. It opens a folder, moves through its images and zooms; zoom lock comes next.
+**Status:** early development. It opens a folder, moves through its images and zooms, with zoom lock; panning comes next.
 
 ## What works now
 - Open an image or a folder from the command line, or with Ctrl+O. Opening an image makes its folder the list.
@@ -10,6 +10,7 @@ A fast image viewer for Linux, inspired by FastStone Image Viewer.
 - JPEG, PNG, GIF and BMP
 - Zoom modes: fit, fit width and actual size (fit height only through the settings file for now); the mode is remembered. An image larger than the window opens at its top (top-centre if also wider); fit only shrinks, so an image smaller than the window keeps its size
 - + / − zoom the image on screen; the next image opens in the zoom mode again
+- Zoom lock (Ctrl+Shift+L): every next image opens at the same zoom %, at its top; + / − change the locked %. Remembered after a restart
 - Photos are turned upright using their EXIF orientation
 - Window title shows the file name, its position in the folder, the image size and the zoom %
 - The window opens on the monitor under the mouse pointer; Enter toggles full-screen
@@ -52,6 +53,7 @@ so new windows open on the monitor with the mouse pointer.
 | W | Fit width |
 | A | Fit to window ↔ actual size (100%) |
 | 1 | Actual size (100%) |
+| Ctrl+Shift+L | Zoom lock on/off |
 
 ## Settings
 Settings are kept in `~/.config/linview/settings.properties` (or `$XDG_CONFIG_HOME/linview/`).

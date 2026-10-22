@@ -101,14 +101,16 @@ class ViewerControllerTest {
     @Test
     void titleShowsNamePositionSizeAndZoom() {
         assertEquals("img2.jpg — 2/10 — 6000×4000 — 18% — linview",
-                ViewerController.title("img2.jpg", 2, 10, 6000, 4000, 1080.0 / 6000));
+                ViewerController.title("img2.jpg", 2, 10, 6000, 4000, 1080.0 / 6000, false));
         assertEquals("img2.jpg — 2/10 — 6000×4000 — linview",
-                ViewerController.title("img2.jpg", 2, 10, 6000, 4000, 0));
+                ViewerController.title("img2.jpg", 2, 10, 6000, 4000, 0, false));
+        assertEquals("img2.jpg — 2/10 — 6000×4000 — 70% (locked) — linview",
+                ViewerController.title("img2.jpg", 2, 10, 6000, 4000, 0.7, true));
     }
 
     @Test
     void titleLeavesOutSizeWhileLoading() {
-        assertEquals("img2.jpg — 2/10 — linview", ViewerController.title("img2.jpg", 2, 10, 0, 0, 0));
+        assertEquals("img2.jpg — 2/10 — linview", ViewerController.title("img2.jpg", 2, 10, 0, 0, 0, false));
     }
 
     @Test
@@ -285,6 +287,82 @@ class ViewerControllerTest {
         controller.setZoomMode(Zoom.Mode.WIDTH);
         controller.toggleFitOrActual();
         assertEquals(Zoom.Mode.ACTUAL, settings.zoomMode());
+    }
+
+    /** R-ZOOM-02, R-ZOOM-03: locked at 70%, the next image opens at 70% and at its top-centre. */
+    @Test
+    void zoomLockKeepsThePercentForTheNextImages() throws IOException {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);   // fit: 50%
+        controller.zoomIn();             // 67%
+        controller.zoomIn();             // 75%
+        controller.toggleZoomLock();
+        assertEquals(Zoom.Mode.LOCK, settings.zoomMode());
+        assertEquals(75, settings.zoomPercent());
+        assertTrue(title.contains("75% (locked)"), title);
+        assertTrue(Files.readString(settingsFile).contains("zoom.mode=lock\nzoom.percent=75\n"));
+
+        controller.zoomOut();            // locked, so this changes the locked % too
+        assertEquals(67, settings.zoomPercent());
+        assertTrue(Files.readString(settingsFile).contains("zoom.percent=67\n"));
+
+        controller.next();
+        lastLoad().finish(1200, 1800);   // tall: 804×1206 at 67% is taller than the view
+        assertEquals(new Zoom.View(0.67, (1920 - 1200 * 0.67) / 2, 0), shownView);
+        controller.next();
+        lastLoad().finish(3840, 2160);   // larger both ways: top-centre
+        assertEquals(0.67, shownView.scale(), 1e-9);
+        assertEquals(0, shownView.y(), 1e-9);
+        assertEquals((1920 - 3840 * 0.67) / 2, shownView.x(), 1e-9);
+    }
+
+    @Test
+    void zoomLockAgainReturnsToTheModeBefore() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);
+        controller.setZoomMode(Zoom.Mode.WIDTH);
+        controller.toggleZoomLock();
+        controller.toggleZoomLock();
+        assertEquals(Zoom.Mode.WIDTH, settings.zoomMode());
+        assertFalse(title.contains("locked"), title);
+    }
+
+    @Test
+    void zoomLockAfterARestartReturnsToFit() {
+        settings.setZoomMode(Zoom.Mode.LOCK);   // as loaded from the settings file
+        settings.setZoomPercent(70);
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);
+        assertEquals(0.7, shownView.scale(), 1e-9);
+        controller.toggleZoomLock();
+        assertEquals(Zoom.Mode.FIT, settings.zoomMode());
+        assertEquals(0.5, shownView.scale(), 1e-9);
+    }
+
+    @Test
+    void modeKeysLeaveTheLock() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);
+        controller.toggleZoomLock();
+        controller.toggleFitOrActual();
+        assertEquals(Zoom.Mode.ACTUAL, settings.zoomMode());
+    }
+
+    @Test
+    void handZoomWithoutLockDoesNotChangeTheLockedPercent() {
+        settings.setZoomPercent(70);
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);
+        controller.zoomIn();
+        assertEquals(70, settings.zoomPercent());
+        assertFalse(Files.exists(settingsFile));
+    }
+
+    @Test
+    void nothingToLockWithoutAnImage() {
+        controller.toggleZoomLock();
+        assertEquals(Zoom.Mode.FIT, settings.zoomMode());
+        assertFalse(Files.exists(settingsFile));
     }
 
     @Test

@@ -15,6 +15,7 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - F11 and a double-click toggle full-screen too, besides Enter (#18)
 - Settings file `~/.config/linview/settings.properties`, read at start: missing file → defaults, invalid value → default + warning in the log. Saving replaces the file only after the new one is fully written; the features that change a setting will use it. Keys listed in the README (#7)
 - Zoom calculations for fit, fit width, fit height, actual size and zoom lock, with the start position (top, or top-centre when larger than the window; centred when smaller). Logic only; the viewer uses it from #11 (#10)
+- Zoom lock with Ctrl+Shift+L (FastStone's key): locks the current zoom %, so next/previous images open at that % and at their top (top-centre if also wider); + / − change the locked %; pressed again it returns to the previous mode. Saved in the settings; the title shows "(locked)" (#12)
 - Zoom modes in the viewer: B fit, W fit width, 1 actual size, A switches between fit and actual size; the chosen mode is saved. Fit height has no key (settings file only for now). + / − zoom in steps around the middle of the window; the next image opens in the mode again. Resizing the window refits. The title shows the zoom % (#11)
 
 ### Fixed
