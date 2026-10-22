@@ -1,4 +1,4 @@
-package linview;
+package linview.image;
 
 import java.nio.file.Path;
 
@@ -10,9 +10,9 @@ import com.drew.metadata.exif.ExifIFD0Directory;
  * How to turn a stored image upright, from its EXIF orientation tag (R-FMT-03): mirror left-right first,
  * then rotate clockwise. No UI, so it can be tested without a screen.
  */
-record Orientation(int degrees, boolean mirror) {
+public record Orientation(int degrees, boolean mirror) {
 
-    static final Orientation UPRIGHT = new Orientation(0, false);
+    public static final Orientation UPRIGHT = new Orientation(0, false);
 
     /** EXIF values 1–8 (same table as exiftool); anything else is treated as upright. */
     static Orientation of(int exifValue) {
@@ -46,7 +46,7 @@ record Orientation(int degrees, boolean mirror) {
     }
 
     /** True when the upright image is the stored one turned sideways, so its width and height swap. */
-    boolean swapsSides() {
+    public boolean swapsSides() {
         return degrees == 90 || degrees == 270;
     }
 }

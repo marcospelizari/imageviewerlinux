@@ -1,17 +1,29 @@
-package linview;
+package linview.ui;
 
 import java.util.List;
 
 import javafx.geometry.Point2D;
 import javafx.geometry.Rectangle2D;
+import javafx.scene.robot.Robot;
+import javafx.stage.Screen;
+import javafx.stage.Stage;
 
 /**
  * Chooses where a new window goes: centred on the monitor under the mouse pointer (R-FS-01).
  * Pure geometry, so it can be tested without a screen.
  */
-final class WindowPlacement {
+public final class WindowPlacement {
 
     private WindowPlacement() {
+    }
+
+    /** Without an explicit position JavaFX centres on the primary monitor; use the mouse's monitor instead. */
+    public static void placeOnMouseScreen(Stage stage, double width, double height) {
+        List<Rectangle2D> screens = Screen.getScreens().stream().map(Screen::getVisualBounds).toList();
+        Rectangle2D screen = screenAt(new Robot().getMousePosition(), screens, Screen.getPrimary().getVisualBounds());
+        Point2D corner = centredOn(screen, width, height);
+        stage.setX(corner.getX());
+        stage.setY(corner.getY());
     }
 
     /** The screen containing {@code mouse}, or {@code fallback} if the position is unknown or off all screens. */

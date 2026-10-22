@@ -1,4 +1,4 @@
-package linview;
+package linview.viewer;
 
 /**
  * Zoom calculations (R-ZOOM-01, R-ZOOM-03, R-ZOOM-04): the scale for a zoom mode and where a new image starts.
@@ -6,22 +6,25 @@ package linview;
  * Zooming with + / − changes only the image on screen; the next image starts again from the mode (decided
  * 2026-10-22), so nothing here remembers a manual zoom.
  */
-final class Zoom {
+public final class Zoom {
 
-    enum Mode { FIT, WIDTH, HEIGHT, ACTUAL, LOCK }
+    public enum Mode { FIT, WIDTH, HEIGHT, ACTUAL, LOCK }
 
-    /** Image drawn at {@code scale} with its top-left corner at ({@code x}, {@code y}) in the view; negative = scrolled. */
-    record View(double scale, double x, double y) {
+    /**
+     * Image drawn at {@code scale} with its top-left corner at ({@code x}, {@code y}) in the view;
+     * negative = scrolled.
+     */
+    public record View(double scale, double x, double y) {
     }
 
     private Zoom() {
     }
 
     /**
-     * Scale for {@code mode}: 1 = actual size. {@code lockedPercent} is used only by {@link Mode#LOCK}. Without
-     * {@code enlargeSmall} the fit modes never scale above 1, so small images keep their real size.
+     * Scale for {@code mode}: 1 = actual size. {@code lockedPercent} is used only by {@link Mode#LOCK}. The fit
+     * modes only shrink: an image smaller than the view keeps its real size (decided 2026-10-22).
      */
-    static double scale(Mode mode, double lockedPercent, boolean enlargeSmall,
+    static double scale(Mode mode, double lockedPercent,
                         double imageWidth, double imageHeight, double viewWidth, double viewHeight) {
         requirePositive(imageWidth, imageHeight, viewWidth, viewHeight);
         double fit = switch (mode) {
@@ -32,7 +35,7 @@ final class Zoom {
             case LOCK -> lockedPercent / 100;
         };
         boolean fitMode = mode == Mode.FIT || mode == Mode.WIDTH || mode == Mode.HEIGHT;
-        return fitMode && !enlargeSmall ? Math.min(1, fit) : fit;
+        return fitMode ? Math.min(1, fit) : fit;
     }
 
     /**
@@ -48,10 +51,12 @@ final class Zoom {
         return new View(scale, x, y);
     }
 
-    /** Zoom steps for + / −, in %; the range matches the {@code zoom.percent} setting. */
-    static final double[] STEPS = {
-        1, 2, 3, 5, 8, 10, 15, 20, 25, 33, 50, 67, 75, 100,
-        125, 150, 200, 300, 400, 600, 800, 1200, 1600, 2400, 3200};
+    /** Zoom range in % for + / − and for the locked zoom; more than 200% shows too little of a small image. */
+    public static final double MIN_PERCENT = 1;
+    public static final double MAX_PERCENT = 200;
+
+    /** Zoom steps for + / −, in %, from {@link #MIN_PERCENT} to {@link #MAX_PERCENT}. */
+    static final double[] STEPS = {1, 2, 3, 5, 8, 10, 15, 20, 25, 33, 50, 67, 75, 100, 125, 150, 200};
 
     /** The next step above {@code scale}, or the largest one. */
     static double zoomIn(double scale) {

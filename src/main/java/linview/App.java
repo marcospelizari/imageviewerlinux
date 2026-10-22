@@ -1,36 +1,37 @@
 package linview;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.file.AccessDeniedException;
-import java.nio.file.Files;
-import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 import javafx.application.Application;
-import javafx.geometry.Point2D;
-import javafx.geometry.Rectangle2D;
+import javafx.beans.InvalidationListener;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
-import javafx.scene.robot.Robot;
 import javafx.stage.FileChooser;
-import javafx.stage.Screen;
 import javafx.stage.Stage;
 
+import linview.image.ImageLoader;
+import linview.image.Orientation;
+import linview.settings.Settings;
+import linview.settings.SettingsStore;
+import linview.ui.Keys;
+import linview.ui.ViewerPane;
+import linview.ui.WindowPlacement;
+import linview.viewer.ImageList;
+import linview.viewer.ViewerController;
+import linview.viewer.Zoom;
+
 /**
- * Entry point: opens the file or folder given on the command line (or with Ctrl+O) and shows its image (R-NAV-01).
- * Keys are in {@link Keys}.
+ * Entry point and composition root (REPORT.md §6): builds the components, connects them and owns the window.
+ * Opens the file or folder given on the command line (R-NAV-01). Keys are in {@link Keys}; what they do is in
+ * {@link ViewerController}.
  */
 public class App extends Application {
-
-    static final String TITLE = "linview";
-
-    static final String OPEN_HINT = "Press Ctrl+O to open an image or folder";
 
     /** Icon sizes in src/main/resources/linview/icons; the desktop picks the best one for each place. */
     static final int[] ICON_SIZES = {16, 32, 48, 64, 128, 256, 512};
@@ -39,33 +40,38 @@ public class App extends Application {
         return "/linview/icons/linview-" + size + ".png";
     }
 
-    /**
-     * {@code name — n/N — W×H — zoom% — linview}; size and zoom are left out while they aren't known yet
-     * ({@code width <= 0}, {@code scale <= 0}).
-     */
-    static String title(String name, int position, int size, double width, double height, double scale) {
-        String dimensions = width > 0 ? String.format(" \u2014 %.0f\u00d7%.0f", width, height) : "";
-        String zoom = scale > 0 ? " \u2014 " + Math.round(scale * 100) + "%" : "";
-        return name + " \u2014 " + position + "/" + size + dimensions + zoom + " \u2014 " + TITLE;
-    }
-
     private static final System.Logger LOG = System.getLogger("linview");
 
-    private ViewerPane viewer;
-    /** Loaded at start (R-SET-01); each feature that changes a setting saves it with {@link Settings#save}. */
-    private Settings settings;
     private Stage stage;
-    /** The open folder; {@code null} when nothing is open. */
-    private ImageList images;
-    /** The image being loaded or shown; a late result from an earlier one is ignored. */
-    private Image current;
+    private ViewerController<Image> controller;
 
     @Override
     public void start(Stage stage) {
         this.stage = stage;
-        settings = Settings.load(Settings.defaultFile(), warning -> LOG.log(System.Logger.Level.WARNING, warning));
-        viewer = new ViewerPane(settings);
-        viewer.scaleProperty().addListener((obs, old, now) -> showTitle());
+        SettingsStore store = new SettingsStore(SettingsStore.defaultFile(),
+                warning -> LOG.log(System.Logger.Level.WARNING, warning));
+        Settings settings = store.load();
+        ViewerPane viewer = new ViewerPane();
+        controller = new ViewerController<>(settings, store, new ImageLoader()::load, new ViewerController.Display<>() {
+            @Override
+            public void showImage(Image image, Orientation orientation, Zoom.View view) {
+                viewer.show(image, orientation, view);
+            }
+
+            @Override
+            public void showMessage(String text) {
+                viewer.showMessage(text);
+            }
+
+            @Override
+            public void showTitle(String title) {
+                stage.setTitle(title);
+            }
+        });
+        InvalidationListener resized = obs -> controller.resize(viewer.getWidth(), viewer.getHeight());
+        viewer.widthProperty().addListener(resized);
+        viewer.heightProperty().addListener(resized);
+
         Scene scene = new Scene(viewer, 1024, 700);
         scene.setOnKeyPressed(this::keyPressed);
         scene.setOnMouseClicked(e -> {
@@ -75,19 +81,19 @@ public class App extends Application {
         });
 
         stage.setFullScreenExitHint("");
-        stage.setTitle(TITLE);
+        stage.setTitle(ViewerController.TITLE);
         for (int size : ICON_SIZES) {
             stage.getIcons().add(new Image(App.class.getResource(iconPath(size)).toExternalForm()));
         }
         stage.setScene(scene);
-        placeOnMouseScreen(stage, scene.getWidth(), scene.getHeight());
+        WindowPlacement.placeOnMouseScreen(stage, scene.getWidth(), scene.getHeight());
         stage.show();
 
         List<String> args = getParameters().getRaw();
         if (args.isEmpty()) {
-            viewer.showMessage(OPEN_HINT);
+            controller.showOpenHintIfEmpty();
         } else {
-            open(Path.of(args.get(0)));
+            controller.open(Path.of(args.get(0)));
         }
     }
 
@@ -97,18 +103,18 @@ public class App extends Application {
             return;
         }
         switch (action) {
-            case NEXT -> moveTo(images == null ? null : images.next());
-            case PREVIOUS -> moveTo(images == null ? null : images.previous());
-            case FIRST -> moveTo(images == null ? null : images.first());
-            case LAST -> moveTo(images == null ? null : images.last());
+            case NEXT -> controller.next();
+            case PREVIOUS -> controller.previous();
+            case FIRST -> controller.first();
+            case LAST -> controller.last();
             case OPEN -> chooseAndOpen();
             case FULL_SCREEN -> toggleFullScreen();
-            case ZOOM_IN -> viewer.zoomIn();
-            case ZOOM_OUT -> viewer.zoomOut();
-            case FIT -> setZoomMode(Zoom.Mode.FIT);
-            case FIT_WIDTH -> setZoomMode(Zoom.Mode.WIDTH);
-            case ACTUAL_SIZE -> setZoomMode(Zoom.Mode.ACTUAL);
-            case FIT_OR_ACTUAL -> setZoomMode(settings.zoomMode == Zoom.Mode.ACTUAL ? Zoom.Mode.FIT : Zoom.Mode.ACTUAL);
+            case ZOOM_IN -> controller.zoomIn();
+            case ZOOM_OUT -> controller.zoomOut();
+            case FIT -> controller.setZoomMode(Zoom.Mode.FIT);
+            case FIT_WIDTH -> controller.setZoomMode(Zoom.Mode.WIDTH);
+            case ACTUAL_SIZE -> controller.setZoomMode(Zoom.Mode.ACTUAL);
+            case FIT_OR_ACTUAL -> controller.toggleFitOrActual();
             case ESCAPE -> {
                 // In full-screen JavaFX itself leaves full-screen on Esc.
                 if (!stage.isFullScreen()) {
@@ -118,31 +124,9 @@ public class App extends Application {
         }
     }
 
-    /** Pressing the current mode's key again drops a + / − zoom; a new mode is saved (R-SET-01). */
-    private void setZoomMode(Zoom.Mode mode) {
-        boolean changed = settings.zoomMode != mode;
-        settings.zoomMode = mode;
-        viewer.applyMode();
-        if (changed) {
-            try {
-                settings.save(Settings.defaultFile());
-            } catch (IOException e) {
-                LOG.log(System.Logger.Level.WARNING, "Can't save the settings: " + e.getMessage());
-            }
-        }
-    }
-
     /** Enter, F11 or a double-click (R-VIEW-02). */
     private void toggleFullScreen() {
         stage.setFullScreen(!stage.isFullScreen());
-    }
-
-    /** Shows {@code moved} unless it's the image already shown (end of the folder, or nothing open). */
-    private void moveTo(ImageList moved) {
-        if (moved != null && moved != images) {
-            images = moved;
-            showCurrent();
-        }
     }
 
     /** Ctrl+O / O: pick an image; its folder becomes the list. */
@@ -155,100 +139,14 @@ public class App extends Application {
             patterns.add("*." + ext.toUpperCase(Locale.ROOT));
         }
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Images", patterns));
-        chooser.setInitialDirectory(startFolder().toFile());
+        chooser.setInitialDirectory(controller.startFolder().toFile());
 
         File chosen = chooser.showOpenDialog(stage);
         if (chosen != null) {
-            open(chosen.toPath());
-        } else if (images == null || images.isEmpty()) {
-            viewer.showMessage(OPEN_HINT);
+            controller.open(chosen.toPath());
+        } else {
+            controller.showOpenHintIfEmpty();
         }
-    }
-
-    private Path startFolder() {
-        if (images != null && Files.isDirectory(images.folder())) {
-            return images.folder();
-        }
-        Path home = Path.of(System.getProperty("user.home"));
-        Path pictures = home.resolve("Pictures");
-        return Files.isDirectory(pictures) ? pictures : home;
-    }
-
-    private void open(Path path) {
-        try {
-            images = ImageList.open(path);
-        } catch (NoSuchFileException e) {
-            nothingOpen("Not found: " + path);
-            return;
-        } catch (AccessDeniedException e) {
-            nothingOpen("No permission to read: " + path);
-            return;
-        } catch (IOException e) {
-            nothingOpen(e.getMessage());
-            return;
-        }
-        if (images.isEmpty()) {
-            nothingOpen("No images in " + images.folder() + "\n\n" + OPEN_HINT);
-            return;
-        }
-        showCurrent();
-    }
-
-    private void nothingOpen(String message) {
-        images = null;
-        current = null;
-        stage.setTitle(TITLE);
-        viewer.showMessage(message);
-    }
-
-    private void showCurrent() {
-        Path file = images.current();
-        String name = file.getFileName().toString();
-        stage.setTitle(title(name, images.position(), images.size(), 0, 0, 0));
-
-        Orientation orientation = Orientation.read(file);
-        // Background loading keeps the window responsive; the result arrives through the listeners.
-        Image previous = current;
-        Image image = new Image(file.toUri().toString(), true);
-        current = image;
-        if (previous != null) {
-            previous.cancel();   // stop decoding an image no longer wanted (fast key presses); set current first so it's ignored
-        }
-        image.progressProperty().addListener((obs, old, now) -> loaded(image, name, orientation));
-        image.errorProperty().addListener((obs, old, now) -> loaded(image, name, orientation));
-        loaded(image, name, orientation);
-    }
-
-    private void loaded(Image image, String name, Orientation orientation) {
-        if (image != current) {
-            return;
-        }
-        if (image.isError()) {
-            viewer.showMessage("Can't show " + name + ": the file is damaged or not a supported image");
-        } else if (image.getProgress() >= 1 && image.getWidth() > 0) {
-            viewer.show(image, orientation);
-            showTitle();
-        }
-    }
-
-    /** Title for the image on screen; while the next one is still loading its own title stays. */
-    private void showTitle() {
-        if (current == null || viewer.image() != current) {
-            return;
-        }
-        String name = images.current().getFileName().toString();
-        stage.setTitle(title(name, images.position(), images.size(),
-                viewer.uprightWidth(), viewer.uprightHeight(), viewer.scaleProperty().get()));
-    }
-
-    /** Without an explicit position JavaFX centres on the primary monitor; use the mouse's monitor instead. */
-    private static void placeOnMouseScreen(Stage stage, double width, double height) {
-        List<Rectangle2D> screens = Screen.getScreens().stream().map(Screen::getVisualBounds).toList();
-        Rectangle2D screen = WindowPlacement.screenAt(
-                new Robot().getMousePosition(), screens, Screen.getPrimary().getVisualBounds());
-        Point2D corner = WindowPlacement.centredOn(screen, width, height);
-        stage.setX(corner.getX());
-        stage.setY(corner.getY());
     }
 
     public static void main(String[] args) {
