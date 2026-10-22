@@ -1,4 +1,4 @@
-package linview;
+package linview.image;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 

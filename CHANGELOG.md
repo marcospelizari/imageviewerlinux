@@ -14,13 +14,16 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - Photos are shown upright using their EXIF orientation (all 8 values); no or broken EXIF → shown as stored. New dependency: metadata-extractor (Apache-2.0) (#8)
 - F11 and a double-click toggle full-screen too, besides Enter (#18)
 - Settings file `~/.config/linview/settings.properties`, read at start: missing file → defaults, invalid value → default + warning in the log. Saving replaces the file only after the new one is fully written; the features that change a setting will use it. Keys listed in the README (#7)
-- Zoom calculations for fit, fit width, fit height, actual size and zoom lock, with the start position (top, or top-centre when larger than the window; centred when smaller) and "enlarge small images". Logic only; the viewer uses it from #11 (#10)
+- Zoom calculations for fit, fit width, fit height, actual size and zoom lock, with the start position (top, or top-centre when larger than the window; centred when smaller). Logic only; the viewer uses it from #11 (#10)
 - Zoom modes in the viewer: B fit, W fit width, 1 actual size, A switches between fit and actual size; the chosen mode is saved. Fit height has no key (settings file only for now). + / − zoom in steps around the middle of the window; the next image opens in the mode again. Resizing the window refits. The title shows the zoom % (#11)
 
 ### Fixed
 - Full-screen on the second monitor: confirmed working since the window opens on the mouse's monitor (#2)
 
 ### Changed
+- Code organised into packages `viewer`, `ui`, `image`, `settings`; `ViewerController` now runs the viewing workflow (open, navigate, load, zoom) and `App` only builds and connects the parts; `SettingsStore` reads and saves the settings file. No change in behaviour or in the settings file (#42)
+- Zoom goes up to 200% at most (+ steps and `zoom.percent`); more shows too little of a small image. A saved `zoom.percent` above 200 now falls back to 100 with a warning (#42, decided by Marcos 2026-10-22)
+- Fit modes only shrink: an image smaller than the window keeps its size. The `zoom.enlargeSmall` setting is removed; an old settings file with it still loads (#42, #13 dropped)
 - CI: a newer push cancels a superseded pipeline; the HTML test report is kept for a week; the Gradle download is checked against its official SHA-256 (#43)
 - README describes what works now, the roadmap, keys and known issues (#41)
 - New application icon (camera), made from `assets/icon/linview_icon.png`; it replaces the first one (#40)

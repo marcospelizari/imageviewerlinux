@@ -1,4 +1,4 @@
-package linview;
+package linview.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -6,6 +6,7 @@ import java.util.List;
 
 import javafx.geometry.Point2D;
 import javafx.geometry.Rectangle2D;
+
 import org.junit.jupiter.api.Test;
 
 /** R-FS-01: the window opens on the monitor under the mouse pointer. */

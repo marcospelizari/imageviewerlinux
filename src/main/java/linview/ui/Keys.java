@@ -1,4 +1,4 @@
-package linview;
+package linview.ui;
 
 import static java.util.Map.entry;
 
@@ -11,9 +11,9 @@ import javafx.scene.input.KeyEvent;
  * Every keyboard shortcut, in one table (report §3.4). Keys copy FastStone; there is no config file for them.
  * No UI, so it can be tested without a screen.
  */
-final class Keys {
+public final class Keys {
 
-    enum Action {
+    public enum Action {
         NEXT, PREVIOUS, FIRST, LAST, OPEN, FULL_SCREEN, ESCAPE,
         ZOOM_IN, ZOOM_OUT, FIT, FIT_WIDTH, ACTUAL_SIZE, FIT_OR_ACTUAL
     }
@@ -56,7 +56,7 @@ final class Keys {
     private Keys() {
     }
 
-    static Action actionFor(KeyEvent e) {
+    public static Action actionFor(KeyEvent e) {
         return actionFor(e.getCode(), e.isControlDown(), e.isShiftDown(), e.isAltDown());
     }
 

@@ -1,4 +1,4 @@
-package linview;
+package linview.viewer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;

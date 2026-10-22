@@ -1,10 +1,12 @@
-package linview;
+package linview.ui;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 import javafx.scene.input.KeyCode;
-import linview.Keys.Action;
+
+import linview.ui.Keys.Action;
+
 import org.junit.jupiter.api.Test;
 
 /** R-NAV-03: FastStone navigation keys, all in one table. */

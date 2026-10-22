@@ -1,4 +1,4 @@
-package linview;
+package linview.viewer;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -14,10 +14,10 @@ import java.util.stream.Stream;
  * The supported images of one folder in natural name order (R-NAV-02), and which one is shown (R-NAV-01).
  * No UI, so it can be tested without a screen.
  */
-final class ImageList {
+public final class ImageList {
 
     /** Formats JavaFX reads on its own (R-FMT-01). #9 adds the TwelveMonkeys formats. */
-    static final Set<String> EXTENSIONS = Set.of("jpg", "jpeg", "png", "gif", "bmp");
+    public static final Set<String> EXTENSIONS = Set.of("jpg", "jpeg", "png", "gif", "bmp");
 
     /**
      * Natural, case-insensitive order: {@code img2} before {@code img10}. Digit runs compare by value, so

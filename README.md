@@ -8,7 +8,7 @@ A fast image viewer for Linux, inspired by FastStone Image Viewer.
 - Open an image or a folder from the command line, or with Ctrl+O. Opening an image makes its folder the list.
 - Move through the folder with the keyboard; it stops at the first and last image
 - JPEG, PNG, GIF and BMP
-- Zoom modes: fit, fit width and actual size (fit height only through the settings file for now); the mode is remembered. An image larger than the window opens at its top (top-centre if also wider); small images are not enlarged
+- Zoom modes: fit, fit width and actual size (fit height only through the settings file for now); the mode is remembered. An image larger than the window opens at its top (top-centre if also wider); fit only shrinks, so an image smaller than the window keeps its size
 - + / − zoom the image on screen; the next image opens in the zoom mode again
 - Photos are turned upright using their EXIF orientation
 - Window title shows the file name, its position in the folder, the image size and the zoom %
@@ -61,8 +61,7 @@ Edit it while linview is closed. Most settings are used by features that are sti
 | Key | Values | Default |
 |---|---|---|
 | `zoom.mode` | `fit`, `width`, `height`, `actual`, `lock` | `fit` |
-| `zoom.percent` | zoom % used by `lock`, 1–3200 | `100` |
-| `zoom.enlargeSmall` | `true` / `false`: enlarge images smaller than the screen | `false` |
+| `zoom.percent` | zoom % used by `lock`, 1–200 | `100` |
 | `wheel` | `scroll` (wheel scrolls the image) / `navigate` (next/previous image) | `scroll` |
 | `background` | `black`, `darkgrey`, `grey`, `white` or `#RRGGBB` | `black` |
 | `overlay.fileName` | `true` / `false`: file name in full-screen | `true` |

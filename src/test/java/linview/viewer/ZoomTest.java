@@ -1,4 +1,4 @@
-package linview;
+package linview.viewer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import org.junit.jupiter.api.Test;
 
 /**
- * R-ZOOM-01, R-ZOOM-03, R-ZOOM-04 on a 1920×1080 view. Sizes are those of the manual test images in
+ * R-ZOOM-01, R-ZOOM-03 on a 1920×1080 view. Sizes are those of the manual test images in
  * ~/Pictures/linview-test: small img1.bmp, tall exif/Portrait_*.jpg, wide exif/47C1….png.
  */
 class ZoomTest {
@@ -20,11 +20,11 @@ class ZoomTest {
     private static final double[] WIDE = {2436, 1125};
 
     private static double scale(Zoom.Mode mode, double[] image) {
-        return scale(mode, 100, false, image);
+        return scale(mode, 100, image);
     }
 
-    private static double scale(Zoom.Mode mode, double percent, boolean enlargeSmall, double[] image) {
-        return Zoom.scale(mode, percent, enlargeSmall, image[0], image[1], VIEW_W, VIEW_H);
+    private static double scale(Zoom.Mode mode, double percent, double[] image) {
+        return Zoom.scale(mode, percent, image[0], image[1], VIEW_W, VIEW_H);
     }
 
     private static Zoom.View start(double scale, double[] image) {
@@ -42,7 +42,7 @@ class ZoomTest {
         assertEquals(1920.0 / 2436, scale(Zoom.Mode.WIDTH, WIDE), EPS);
         assertEquals(1080.0 / 1125, scale(Zoom.Mode.HEIGHT, WIDE), EPS);
         assertEquals(1080.0 / 1800, scale(Zoom.Mode.HEIGHT, TALL), EPS);
-        // Fit width would enlarge the 1200 px wide image; that's off by default.
+        // Fit width would enlarge the 1200 px wide image; fit modes only shrink.
         assertEquals(1, scale(Zoom.Mode.WIDTH, TALL), EPS);
     }
 
@@ -50,24 +50,16 @@ class ZoomTest {
     void actualSizeAndLockIgnoreTheView() {
         assertEquals(1, scale(Zoom.Mode.ACTUAL, WIDE), EPS);
         assertEquals(1, scale(Zoom.Mode.ACTUAL, SMALL), EPS);
-        assertEquals(0.7, scale(Zoom.Mode.LOCK, 70, false, TALL), EPS);
-        assertEquals(2.5, scale(Zoom.Mode.LOCK, 250, false, SMALL), EPS);   // lock may enlarge: the user chose it
+        assertEquals(0.7, scale(Zoom.Mode.LOCK, 70, TALL), EPS);
+        assertEquals(2, scale(Zoom.Mode.LOCK, 200, SMALL), EPS);   // lock may enlarge: the user chose it
     }
 
+    /** Fit only shrinks: an image smaller than the screen keeps its real size (Marcos, 2026-10-22). */
     @Test
-    void smallImagesKeepTheirSizeUnlessEnlargeIsOn() {
+    void smallImagesKeepTheirSize() {
         for (Zoom.Mode mode : new Zoom.Mode[] {Zoom.Mode.FIT, Zoom.Mode.WIDTH, Zoom.Mode.HEIGHT}) {
-            assertEquals(1, scale(mode, 100, false, SMALL), EPS, mode.toString());
+            assertEquals(1, scale(mode, SMALL), EPS, mode.toString());
         }
-        assertEquals(1080.0 / 300, scale(Zoom.Mode.FIT, 100, true, SMALL), EPS);
-        assertEquals(1920.0 / 400, scale(Zoom.Mode.WIDTH, 100, true, SMALL), EPS);
-        assertEquals(1080.0 / 300, scale(Zoom.Mode.HEIGHT, 100, true, SMALL), EPS);
-        assertEquals(1920.0 / 1200, scale(Zoom.Mode.WIDTH, 100, true, TALL), EPS);
-    }
-
-    @Test
-    void enlargeSmallDoesNotChangeShrinking() {
-        assertEquals(scale(Zoom.Mode.FIT, 100, false, WIDE), scale(Zoom.Mode.FIT, 100, true, WIDE), EPS);
     }
 
     @Test
@@ -108,7 +100,10 @@ class ZoomTest {
         assertEquals(0.75, Zoom.zoomOut(1), EPS);
         assertEquals(0.67, Zoom.zoomIn(0.6), EPS);   // from a fit scale to the next step above it
         assertEquals(0.5, Zoom.zoomOut(0.6), EPS);
-        assertEquals(32, Zoom.zoomIn(32), EPS);      // stops at the ends
+        assertEquals(2, Zoom.zoomIn(2), EPS);        // stops at the ends: 200% at most
+        assertEquals(2, Zoom.zoomIn(1.5), EPS);
+        assertEquals(Zoom.MAX_PERCENT, Zoom.STEPS[Zoom.STEPS.length - 1]);
+        assertEquals(Zoom.MIN_PERCENT, Zoom.STEPS[0]);
         assertEquals(0.01, Zoom.zoomOut(0.01), EPS);
     }
 
@@ -143,7 +138,7 @@ class ZoomTest {
 
     @Test
     void sizesMustBePositive() {
-        assertThrows(IllegalArgumentException.class, () -> Zoom.scale(Zoom.Mode.FIT, 100, false, 0, 10, 10, 10));
+        assertThrows(IllegalArgumentException.class, () -> Zoom.scale(Zoom.Mode.FIT, 100, 0, 10, 10, 10));
         assertThrows(IllegalArgumentException.class, () -> Zoom.start(1, 10, 10, 10, Double.NaN));
     }
 }
