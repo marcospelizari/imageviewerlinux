@@ -447,6 +447,71 @@ class ViewerControllerTest {
         assertEquals(new Zoom.View(1, 200, 0), shownView);
     }
 
+    /** R-WHEEL-01 scroll: one notch = 10% of the window height; stops at the edges, never changes image. */
+    @Test
+    void scrollWheelMovesTheImageAndStopsAtTheEdges() {
+        controller.setZoomMode(Zoom.Mode.ACTUAL);
+        controller.open(folder);
+        lastLoad().finish(1200, 1800);   // narrower than the view, taller than it
+        controller.wheel(0, -1);         // wheel down: further down the image
+        assertEquals(new Zoom.View(1, 360, -108), shownView);
+        controller.wheel(-1, 0);         // sideways: the image fits that way
+        assertEquals(new Zoom.View(1, 360, -108), shownView);
+        int count = loads.size();
+        controller.wheel(0, -100);
+        assertEquals(new Zoom.View(1, 360, 1080 - 1800), shownView);
+        controller.wheel(0, 100);
+        assertEquals(new Zoom.View(1, 360, 0), shownView);
+        assertEquals(count, loads.size());
+    }
+
+    @Test
+    void scrollWheelDoesNothingWhenTheImageFits() {
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        Zoom.View before = shownView;
+        controller.wheel(0, -1);
+        assertEquals(before, shownView);
+    }
+
+    /** R-WHEEL-01 navigate: down = next, up = previous; a touchpad's small movements add up to whole notches. */
+    @Test
+    void navigateWheelMovesThroughTheFolder() {
+        settings.setWheel(Settings.Wheel.NAVIGATE);
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        controller.wheel(0, -1);
+        assertEquals("b.jpg — 2/3 — linview", title);
+        controller.wheel(0, 1);
+        assertEquals("a.jpg — 1/3 — linview", title);
+
+        controller.wheel(0, -0.4);
+        controller.wheel(0, -0.4);
+        assertEquals("a.jpg — 1/3 — linview", title);
+        controller.wheel(0, -0.4);
+        assertEquals("b.jpg — 2/3 — linview", title);
+
+        controller.wheel(0, -5);         // stops at the last image
+        assertEquals("c.jpg — 3/3 — linview", title);
+    }
+
+    @Test
+    void ctrlWheelZoomsWhateverTheSetting() {
+        settings.setWheel(Settings.Wheel.NAVIGATE);
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);   // fit: 50%
+        controller.zoomWheel(1, 960, 540);
+        assertEquals(0.67, shownView.scale(), 1e-9);
+        controller.zoomWheel(0.5, 960, 540);
+        assertEquals(0.67, shownView.scale(), 1e-9);
+        controller.zoomWheel(0.5, 960, 540);
+        assertEquals(0.75, shownView.scale(), 1e-9);
+        controller.zoomWheel(0.5, 960, 540);
+        controller.zoomWheel(-0.5, 960, 540);   // turning back drops the half notch
+        assertEquals(0.75, shownView.scale(), 1e-9);
+        assertEquals("a.jpg — 1/3 — 3840×2160 — 75% — linview", title);
+    }
+
     @Test
     void theNextImageForgetsTheDrag() {
         controller.setZoomMode(Zoom.Mode.ACTUAL);

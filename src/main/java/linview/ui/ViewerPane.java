@@ -16,7 +16,8 @@ import linview.viewer.Zoom;
 
 /**
  * Shows one image, or a message instead of it. Where the image goes and how large it is comes from the
- * {@code ViewerController}; this pane only draws it, and passes Ctrl + wheel and drags on to it (R-ZOOM-05).
+ * {@code ViewerController}; this pane only draws it, and passes the wheel and drags on to it (R-ZOOM-05,
+ * R-WHEEL-01).
  */
 public final class ViewerPane extends StackPane {
 
@@ -30,8 +31,6 @@ public final class ViewerPane extends StackPane {
     private boolean dragging;
     private double dragX;
     private double dragY;
-    /** Wheel movement not yet a whole zoom step: a touchpad sends many small ones. */
-    private double wheel;
 
     public ViewerPane() {
         setStyle("-fx-background-color: black;");
@@ -69,30 +68,28 @@ public final class ViewerPane extends StackPane {
         });
     }
 
-    /** Where Ctrl + wheel and drags go; set once, before any image is shown. */
+    /** Where the wheel and drags go; set once, before any image is shown. */
     public void sendGesturesTo(ViewerController<Image> controller) {
         this.controller = controller;
     }
 
-    /** Ctrl + wheel: one zoom step per notch at the mouse. The plain wheel comes with #15. */
+    /** Turns the wheel's pixels into notches; Ctrl + wheel zooms at the mouse, the plain wheel follows the setting. */
     private void scrolled(ScrollEvent e) {
-        if (!e.isControlDown() || controller == null) {
+        if (controller == null) {
             return;
         }
         e.consume();
-        double notch = e.getMultiplierY() > 0 ? e.getMultiplierY() : 40;   // 40 = JavaFX's usual wheel notch
-        if (wheel * e.getDeltaY() < 0) {
-            wheel = 0;   // direction changed: don't let leftovers zoom the wrong way
+        double notchesX = e.getDeltaX() / notch(e.getMultiplierX());
+        double notchesY = e.getDeltaY() / notch(e.getMultiplierY());
+        if (e.isControlDown()) {
+            controller.zoomWheel(notchesY, e.getX(), e.getY());
+        } else {
+            controller.wheel(notchesX, notchesY);
         }
-        wheel += e.getDeltaY();
-        while (Math.abs(wheel) >= notch) {
-            if (wheel > 0) {
-                controller.zoomInAt(e.getX(), e.getY());
-            } else {
-                controller.zoomOutAt(e.getX(), e.getY());
-            }
-            wheel -= Math.signum(wheel) * notch;
-        }
+    }
+
+    private static double notch(double multiplier) {
+        return multiplier > 0 ? multiplier : 40;   // 40 = JavaFX's usual wheel notch
     }
 
     /** {@code image} turned upright with {@code orientation} (R-FMT-03), at the scale and place in {@code v}. */

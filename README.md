@@ -10,6 +10,7 @@ A fast image viewer for Linux, inspired by FastStone Image Viewer.
 - JPEG, PNG, GIF and BMP
 - Zoom modes: fit, fit width and actual size (fit height only through the settings file for now); the mode is remembered. An image larger than the window opens at its top (top-centre if also wider); fit only shrinks, so an image smaller than the window keeps its size
 - + / − zoom the image on screen; the next image opens in the zoom mode again
+- Mouse wheel scrolls a large image, or goes to the next/previous image with `wheel=navigate` in the settings file
 - Ctrl + mouse wheel zooms at the mouse pointer; drag with the left button to move an image larger than the window (grab-hand cursor). Resizing the window or switching full-screen keeps your place
 - Zoom lock (Ctrl+Shift+L): every next image opens at the same zoom %, at its top; + / − change the locked %. Remembered after a restart
 - Photos are turned upright using their EXIF orientation
@@ -50,6 +51,7 @@ so new windows open on the monitor with the mouse pointer.
 | Enter, F11 or double-click | Full-screen on/off |
 | Esc | Leave full-screen; quit from a window |
 | + / − | Zoom in / out (keypad too) |
+| Mouse wheel | Scroll the image, or next/previous image (`wheel` setting) |
 | Ctrl + mouse wheel | Zoom in / out at the mouse pointer |
 | Drag (left button) | Move an image larger than the window |
 | B | Fit to window |
@@ -67,7 +69,7 @@ Edit it while linview is closed. Most settings are used by features that are sti
 |---|---|---|
 | `zoom.mode` | `fit`, `width`, `height`, `actual`, `lock` | `fit` |
 | `zoom.percent` | zoom % used by `lock`, 1–200 | `100` |
-| `wheel` | `scroll` (wheel scrolls the image) / `navigate` (next/previous image) | `scroll` |
+| `wheel` | `scroll` (wheel scrolls the image, stops at its edges) / `navigate` (wheel down = next image, up = previous) | `scroll` |
 | `background` | `black`, `darkgrey`, `grey`, `white` or `#RRGGBB` | `black` |
 | `overlay.fileName` | `true` / `false`: file name in full-screen | `true` |
 | `start.fullScreen` | `true` / `false`: start in full-screen (last-used mode) | `false` |
