@@ -369,6 +369,92 @@ class ViewerControllerTest {
     void zoomKeysBeforeAnImageIsShownDoNothing() {
         controller.zoomIn();
         controller.zoomOut();
+        controller.zoomInAt(100, 100);
+        controller.pan(10, 10);
         assertNull(shownView);
+    }
+
+    /** R-ZOOM-05: Ctrl + wheel keeps the image point under the mouse where it is. */
+    @Test
+    void zoomAtThePointerKeepsThatPointUnderIt() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);   // fit: 50%, image point (960, 540) is at (480, 270)
+        controller.zoomInAt(480, 270);
+        assertEquals(0.67, shownView.scale(), 1e-9);
+        assertEquals(960, (480 - shownView.x()) / shownView.scale(), 1e-9);
+        assertEquals(540, (270 - shownView.y()) / shownView.scale(), 1e-9);
+
+        controller.zoomOutAt(480, 270);   // fits again: centred
+        assertEquals(new Zoom.View(0.5, 0, 0), shownView);
+    }
+
+    @Test
+    void zoomAtThePointerWithLockSavesThePercent() throws IOException {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);
+        controller.toggleZoomLock();      // 50%
+        controller.zoomInAt(100, 100);
+        assertEquals(67, settings.zoomPercent());
+        assertTrue(Files.readString(settingsFile).contains("zoom.percent=67\n"));
+    }
+
+    /** R-ZOOM-05: a drag moves the image only on a side where it's larger, and never past its edges. */
+    @Test
+    void dragMovesOnlyWhereLargerAndStopsAtTheEdges() {
+        controller.open(folder);
+        lastLoad().finish(1200, 1800);
+        controller.setZoomMode(Zoom.Mode.ACTUAL);   // narrower than the view, taller than it
+        assertEquals(new Zoom.View(1, 360, 0), shownView);
+
+        controller.pan(100, -300);
+        assertEquals(new Zoom.View(1, 360, -300), shownView);
+        controller.pan(0, -10_000);
+        assertEquals(new Zoom.View(1, 360, 1080 - 1800), shownView);   // bottom edge
+        controller.pan(0, 10_000);
+        assertEquals(new Zoom.View(1, 360, 0), shownView);              // top edge
+    }
+
+    @Test
+    void dragDoesNothingWhenTheImageFits() {
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        Zoom.View before = shownView;
+        controller.pan(50, 50);
+        assertEquals(before, shownView);
+    }
+
+    /** Decided 2026-10-22: after a drag a resize keeps the middle of the window; the scale follows the mode. */
+    @Test
+    void aResizeAfterADragKeepsTheMiddle() {
+        controller.setZoomMode(Zoom.Mode.WIDTH);
+        controller.open(folder);
+        lastLoad().finish(3840, 4320);   // 50%: 1920×2160, taller than the view
+        controller.pan(0, -400);         // image point y 1880 in the middle: (540 + 400) / 0.5
+        controller.resize(1600, 1080);
+
+        double scale = 1600.0 / 3840;
+        assertEquals(scale, shownView.scale(), 1e-9);
+        assertEquals(540 - 1880 * scale, shownView.y(), 1e-9);
+        assertEquals(0, shownView.x(), 1e-9);
+    }
+
+    @Test
+    void aResizeWithoutDragOrZoomStartsAgainAtTheTop() {
+        controller.setZoomMode(Zoom.Mode.ACTUAL);
+        controller.open(folder);
+        lastLoad().finish(1200, 1800);
+        controller.resize(1600, 900);
+        assertEquals(new Zoom.View(1, 200, 0), shownView);
+    }
+
+    @Test
+    void theNextImageForgetsTheDrag() {
+        controller.setZoomMode(Zoom.Mode.ACTUAL);
+        controller.open(folder);
+        lastLoad().finish(1200, 1800);
+        controller.pan(0, -300);
+        controller.next();
+        lastLoad().finish(1200, 1800);
+        assertEquals(new Zoom.View(1, 360, 0), shownView);
     }
 }

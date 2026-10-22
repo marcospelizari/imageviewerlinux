@@ -76,6 +76,8 @@ public final class ViewerController<I> {
     private Zoom.View view;
     /** True after + / −: a resize keeps that zoom; the next image starts from the mode again (R-ZOOM-01). */
     private boolean zoomedByHand;
+    /** True after a drag: a resize keeps the place, not only the start position (R-ZOOM-05). */
+    private boolean pannedByHand;
     /** Where Ctrl+Shift+L returns to; fit after a restart with the lock on. */
     private Zoom.Mode modeBeforeLock = Zoom.Mode.FIT;
     private double viewWidth;
@@ -174,30 +176,67 @@ public final class ViewerController<I> {
         settings.setZoomPercent(percent);
         settings.setZoomMode(Zoom.Mode.LOCK);
         store.save(settings);
-        zoomTo(percent / 100);
+        zoomTo(percent / 100, viewWidth / 2, viewHeight / 2);
     }
 
-    /** Without zoom lock only the image on screen changes; with it, the locked % changes too and is saved. */
+    /** + / −, around the middle of the window. */
     public void zoomIn() {
-        zoomTo(view == null ? 0 : Zoom.zoomIn(view.scale()));
-        saveLockedZoom();
+        zoomInAt(viewWidth / 2, viewHeight / 2);
     }
 
     public void zoomOut() {
-        zoomTo(view == null ? 0 : Zoom.zoomOut(view.scale()));
+        zoomOutAt(viewWidth / 2, viewHeight / 2);
+    }
+
+    /**
+     * One zoom step keeping the point at ({@code x}, {@code y}) in place, e.g. under the mouse (R-ZOOM-05).
+     * Without zoom lock only the image on screen changes; with it, the locked % changes too and is saved.
+     */
+    public void zoomInAt(double x, double y) {
+        zoomTo(view == null ? 0 : Zoom.zoomIn(view.scale()), x, y);
         saveLockedZoom();
     }
 
-    /** The window's image area changed size: fit modes follow it; a + / − zoom is kept and only tidied. */
+    public void zoomOutAt(double x, double y) {
+        zoomTo(view == null ? 0 : Zoom.zoomOut(view.scale()), x, y);
+        saveLockedZoom();
+    }
+
+    /** Drag (R-ZOOM-05): moves the image by ({@code dx}, {@code dy}), only where it's larger than the window. */
+    public void pan(double dx, double dy) {
+        if (view == null || !canLayOut()) {
+            return;
+        }
+        pannedByHand = true;
+        place(Zoom.around(new Zoom.View(view.scale(), view.x() + dx, view.y() + dy), view.scale(), 0, 0,
+                shown.uprightWidth(), shown.uprightHeight(), viewWidth, viewHeight));
+    }
+
+    /**
+     * The window's image area changed size: fit modes follow it, a + / − zoom is kept. After a zoom or a drag the
+     * point in the middle of the window stays in the middle (decided 2026-10-22); otherwise the image starts again
+     * from the mode, at its top.
+     */
     public void resize(double width, double height) {
+        double oldWidth = viewWidth;
+        double oldHeight = viewHeight;
         viewWidth = width;
         viewHeight = height;
-        if (!zoomedByHand || view == null) {
+        if (view == null || !(zoomedByHand || pannedByHand)) {
             applyMode();
-        } else if (canLayOut()) {
-            place(Zoom.around(view, view.scale(), 0, 0,
-                    shown.uprightWidth(), shown.uprightHeight(), viewWidth, viewHeight));
+            return;
         }
+        if (!canLayOut()) {
+            return;
+        }
+        double w = shown.uprightWidth();
+        double h = shown.uprightHeight();
+        double scale = zoomedByHand ? view.scale()
+                : Zoom.scale(settings.zoomMode(), settings.zoomPercent(), w, h, viewWidth, viewHeight);
+        // Shift by half the size change so the old middle is at the new middle, then zoom around it.
+        Zoom.View centred = new Zoom.View(view.scale(),
+                view.x() + (width - oldWidth) / 2, view.y() + (height - oldHeight) / 2);
+        place(Zoom.around(centred, scale, width / 2, height / 2, w, h, viewWidth, viewHeight));
     }
 
     /** Shows {@code moved} unless it's the image already shown (end of the folder, or nothing open). */
@@ -245,9 +284,10 @@ public final class ViewerController<I> {
         applyMode();
     }
 
-    /** Sizes and places the image from the zoom mode in the settings, dropping any + / − zoom. */
+    /** Sizes and places the image from the zoom mode in the settings, dropping any + / − zoom or drag. */
     private void applyMode() {
         zoomedByHand = false;
+        pannedByHand = false;
         if (!canLayOut()) {
             return;
         }
@@ -257,13 +297,13 @@ public final class ViewerController<I> {
         place(Zoom.start(scale, w, h, viewWidth, viewHeight));
     }
 
-    /** Keeps the point in the middle of the window where it is. */
-    private void zoomTo(double scale) {
+    /** Keeps the point at ({@code x}, {@code y}) where it is. */
+    private void zoomTo(double scale, double x, double y) {
         if (view == null || !canLayOut()) {
             return;
         }
         zoomedByHand = true;
-        place(Zoom.around(view, scale, viewWidth / 2, viewHeight / 2,
+        place(Zoom.around(view, scale, x, y,
                 shown.uprightWidth(), shown.uprightHeight(), viewWidth, viewHeight));
     }
 

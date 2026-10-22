@@ -17,6 +17,7 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - Zoom calculations for fit, fit width, fit height, actual size and zoom lock, with the start position (top, or top-centre when larger than the window; centred when smaller). Logic only; the viewer uses it from #11 (#10)
 - Zoom lock with Ctrl+Shift+L (FastStone's key): locks the current zoom %, so next/previous images open at that % and at their top (top-centre if also wider); + / − change the locked %; pressed again it returns to the previous mode. Saved in the settings; the title shows "(locked)" (#12)
 - Zoom modes in the viewer: B fit, W fit width, 1 actual size, A switches between fit and actual size; the chosen mode is saved. Fit height has no key (settings file only for now). + / − zoom in steps around the middle of the window; the next image opens in the mode again. Resizing the window refits. The title shows the zoom % (#11)
+- Ctrl + mouse wheel zooms one step per notch at the mouse pointer, which stays over the same spot of the image; same steps and rules as + / −, a touchpad adds up small movements. Drag with the left button to move an image larger than the window, never past its edges; grab-hand cursor while there is something to drag. After a zoom or a drag, resizing the window or switching full-screen keeps the middle of the view in place. A drag no longer counts as a double-click (#14)
 
 ### Fixed
 - Full-screen on the second monitor: confirmed working since the window opens on the mouse's monitor (#2)
