@@ -84,6 +84,29 @@ final class ImageList {
         return files.size();
     }
 
+    /** The next image; at the last image it stays there (R-NAV-04), returning this same list. */
+    ImageList next() {
+        return at(index + 1);
+    }
+
+    /** The previous image; at the first image it stays there (R-NAV-04), returning this same list. */
+    ImageList previous() {
+        return at(index - 1);
+    }
+
+    ImageList first() {
+        return at(0);
+    }
+
+    ImageList last() {
+        return at(files.size() - 1);
+    }
+
+    private ImageList at(int newIndex) {
+        int clamped = Math.max(0, Math.min(newIndex, files.size() - 1));
+        return clamped == index || files.isEmpty() ? this : new ImageList(folder, files, clamped);
+    }
+
     /** The supported, non-hidden image files directly inside {@code folder}, sorted with {@link #NATURAL}. */
     static List<Path> imagesIn(Path folder) throws IOException {
         try (Stream<Path> files = Files.list(folder)) {
