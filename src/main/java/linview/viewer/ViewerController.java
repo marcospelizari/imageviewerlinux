@@ -83,6 +83,8 @@ public final class ViewerController<I> {
     private boolean pannedByHand;
     /** Wheel movement not yet a whole notch: a touchpad sends many small ones. */
     private double wheelRest;
+    /** Whether {@link #wheelRest} came from Ctrl + wheel zoom rather than navigating. */
+    private boolean wheelRestIsZoom;
     /** Where Ctrl+Shift+L returns to; fit after a restart with the lock on. */
     private Zoom.Mode modeBeforeLock = Zoom.Mode.FIT;
     private double viewWidth;
@@ -226,7 +228,7 @@ public final class ViewerController<I> {
      */
     public void wheel(double notchesX, double notchesY) {
         if (settings.wheel() == Settings.Wheel.NAVIGATE) {
-            int whole = wholeNotches(notchesY);
+            int whole = wholeNotches(notchesY, false);
             for (int i = 0; i < Math.abs(whole); i++) {
                 if (whole > 0) {
                     previous();
@@ -242,7 +244,7 @@ public final class ViewerController<I> {
 
     /** Ctrl + wheel (R-ZOOM-05): one zoom step per notch at ({@code x}, {@code y}); positive = in. */
     public void zoomWheel(double notches, double x, double y) {
-        int whole = wholeNotches(notches);
+        int whole = wholeNotches(notches, true);
         for (int i = 0; i < Math.abs(whole); i++) {
             if (whole > 0) {
                 zoomInAt(x, y);
@@ -252,10 +254,14 @@ public final class ViewerController<I> {
         }
     }
 
-    /** Adds {@code notches} to what's left over and takes out the whole ones; turning back drops the rest. */
-    private int wholeNotches(double notches) {
-        if (wheelRest * notches < 0) {
+    /**
+     * Adds {@code notches} to what's left over and takes out the whole ones. Turning back, or switching between
+     * zoom and navigating (#47), drops the rest.
+     */
+    private int wholeNotches(double notches, boolean zoom) {
+        if (wheelRest * notches < 0 || zoom != wheelRestIsZoom) {
             wheelRest = 0;
+            wheelRestIsZoom = zoom;
         }
         wheelRest += notches;
         int whole = (int) wheelRest;

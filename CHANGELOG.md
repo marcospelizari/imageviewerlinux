@@ -21,6 +21,7 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - Mouse wheel follows the `wheel` setting: `scroll` (default) scrolls the image, 10% of the window height per notch, sideways too with a tilt wheel or touchpad, and stops at the image's edges; `navigate` goes to the next (down) or previous (up) image. A touchpad's small movements add up to whole notches, also for Ctrl + wheel zoom. Settings file only, no switch in the app (#15)
 
 ### Fixed
+- − no longer enlarges an image already shown below 1% (a fit of a very wide image), and + never shrinks one above 200%; with `wheel=navigate`, a part notch of Ctrl + wheel no longer adds up with the plain wheel into a change of image, or the other way round (#47)
 - Full-screen on the second monitor: confirmed working since the window opens on the mouse's monitor (#2)
 
 ### Changed
