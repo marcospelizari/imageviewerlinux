@@ -21,6 +21,7 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - Full-screen on the second monitor: confirmed working since the window opens on the mouse's monitor (#2)
 
 ### Changed
+- CI: a newer push cancels a superseded pipeline; the HTML test report is kept for a week; the Gradle download is checked against its official SHA-256 (#43)
 - README describes what works now, the roadmap, keys and known issues (#41)
 - New application icon (camera), made from `assets/icon/linview_icon.png`; it replaces the first one (#40)
 
