@@ -14,6 +14,7 @@ A fast image viewer for Linux, inspired by FastStone Image Viewer.
 - Ctrl + mouse wheel zooms at the mouse pointer; drag with the left button to move an image larger than the window (grab-hand cursor). Resizing the window or switching full-screen keeps your place
 - Zoom lock (Ctrl+Shift+L): every next image opens at the same zoom %, at its top; + / − change the locked %. Remembered after a restart
 - Photos are turned upright using their EXIF orientation
+- R / L turn the image on screen 90° right / left; the file is not changed, and the next image opens upright again
 - Window title shows the file name, its position in the folder, the image size and the zoom %
 - The window opens on the monitor under the mouse pointer; Enter toggles full-screen
 
@@ -59,6 +60,7 @@ so new windows open on the monitor with the mouse pointer.
 | A | Fit to window ↔ actual size (100%) |
 | 1 | Actual size (100%) |
 | Ctrl+Shift+L | Zoom lock on/off |
+| R / L | Rotate the view 90° right / left (the file is not changed) |
 
 ## Settings
 Settings are kept in `~/.config/linview/settings.properties` (or `$XDG_CONFIG_HOME/linview/`).

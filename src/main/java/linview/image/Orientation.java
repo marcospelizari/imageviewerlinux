@@ -45,6 +45,14 @@ public record Orientation(int degrees, boolean mirror) {
         return UPRIGHT;
     }
 
+    /**
+     * This orientation turned a further {@code quarterTurns} × 90° clockwise (negative = anticlockwise), as the
+     * R / L view rotation does (R-VIEW-01). The rotation comes after the mirror, so it simply adds up.
+     */
+    public Orientation rotated(int quarterTurns) {
+        return new Orientation(Math.floorMod(degrees + 90 * quarterTurns, 360), mirror);
+    }
+
     /** True when the upright image is the stored one turned sideways, so its width and height swap. */
     public boolean swapsSides() {
         return degrees == 90 || degrees == 270;

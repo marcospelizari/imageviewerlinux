@@ -118,6 +118,8 @@ public class App extends Application {
             case ACTUAL_SIZE -> controller.setZoomMode(Zoom.Mode.ACTUAL);
             case FIT_OR_ACTUAL -> controller.toggleFitOrActual();
             case ZOOM_LOCK -> controller.toggleZoomLock();
+            case ROTATE_RIGHT -> controller.rotateRight();
+            case ROTATE_LEFT -> controller.rotateLeft();
             case ESCAPE -> {
                 // In full-screen JavaFX itself leaves full-screen on Esc.
                 if (!stage.isFullScreen()) {
