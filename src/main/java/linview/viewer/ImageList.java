@@ -17,7 +17,7 @@ import java.util.stream.Stream;
 public final class ImageList {
 
     /** Formats JavaFX reads on its own (R-FMT-01). #9 adds the TwelveMonkeys formats. */
-    public static final Set<String> EXTENSIONS = Set.of("jpg", "jpeg", "png", "gif", "bmp");
+    public static final Set<String> EXTENSIONS = Set.of("jpg", "jpeg", "png", "gif", "bmp", "webp", "tif", "tiff", "psd", "tga");
 
     /**
      * Natural, case-insensitive order: {@code img2} before {@code img10}. Digit runs compare by value, so

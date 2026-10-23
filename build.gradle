@@ -23,6 +23,11 @@ javafx {
 
 dependencies {
     implementation 'com.drewnoakes:metadata-extractor:2.19.0'
+    // WebP, TIFF, PSD and TGA as ImageIO plug-ins (R-FMT-02, BSD-3)
+    implementation 'com.twelvemonkeys.imageio:imageio-webp:3.15.3'
+    implementation 'com.twelvemonkeys.imageio:imageio-tiff:3.15.3'
+    implementation 'com.twelvemonkeys.imageio:imageio-psd:3.15.3'
+    implementation 'com.twelvemonkeys.imageio:imageio-tga:3.15.3'
 
     testImplementation platform('org.junit:junit-bom:5.11.4')
     testImplementation 'org.junit.jupiter:junit-jupiter'

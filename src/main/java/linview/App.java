@@ -44,6 +44,7 @@ public class App extends Application {
 
     private Stage stage;
     private ViewerController<Image> controller;
+    private final ImageLoader loader = new ImageLoader();
 
     @Override
     public void start(Stage stage) {
@@ -52,7 +53,7 @@ public class App extends Application {
                 warning -> LOG.log(System.Logger.Level.WARNING, warning));
         Settings settings = store.load();
         ViewerPane viewer = new ViewerPane();
-        controller = new ViewerController<>(settings, store, new ImageLoader()::load, new ViewerController.Display<>() {
+        controller = new ViewerController<>(settings, store, loader::load, new ViewerController.Display<>() {
             @Override
             public void showImage(Image image, Orientation orientation, Zoom.View view) {
                 viewer.show(image, orientation, view);
@@ -152,6 +153,11 @@ public class App extends Application {
         } else {
             controller.showOpenHintIfEmpty();
         }
+    }
+
+    @Override
+    public void stop() {
+        loader.close();
     }
 
     public static void main(String[] args) {
