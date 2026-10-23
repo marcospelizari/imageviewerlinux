@@ -69,7 +69,7 @@ class ImageListTest {
     @Test
     void listsOnlySupportedVisibleImagesSorted() throws IOException {
         for (String name : List.of("img10.jpg", "img2.JPG", "IMG_0001.jpeg", "b.png", "c.gif", "d.bmp",
-                ".hidden.jpg", "notes.txt", "raw.cr2", "noextension", "jpg")) {
+                "e.webp", "f.TIF", "g.tiff", "h.psd", "i.tga", ".hidden.jpg", "notes.txt", "raw.cr2", "noextension", "jpg")) {
             Files.createFile(folder.resolve(name));
         }
         Files.createDirectory(folder.resolve("sub.jpg"));
@@ -77,7 +77,8 @@ class ImageListTest {
 
         List<String> names = ImageList.imagesIn(folder).stream().map(p -> p.getFileName().toString()).toList();
 
-        assertEquals(List.of("b.png", "c.gif", "d.bmp", "img2.JPG", "img10.jpg", "IMG_0001.jpeg"), names);
+        assertEquals(List.of("b.png", "c.gif", "d.bmp", "e.webp", "f.TIF", "g.tiff", "h.psd", "i.tga",
+                "img2.JPG", "img10.jpg", "IMG_0001.jpeg"), names);
     }
 
     @Test

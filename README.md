@@ -7,7 +7,7 @@ A fast image viewer for Linux, inspired by FastStone Image Viewer.
 ## What works now
 - Open an image or a folder from the command line, or with Ctrl+O. Opening an image makes its folder the list.
 - Move through the folder with the keyboard; it stops at the first and last image
-- JPEG, PNG, GIF and BMP
+- JPEG, PNG, GIF (animated) and BMP; WebP, TIFF, PSD and TGA (first page of a multi-page TIFF, first frame of an animated WebP)
 - Zoom modes: fit, fit width and actual size (fit height only through the settings file for now); the mode is remembered. An image larger than the window opens at its top (top-centre if also wider); fit only shrinks, so an image smaller than the window keeps its size
 - + / − zoom the image on screen; the next image opens in the zoom mode again
 - Mouse wheel scrolls a large image, or goes to the next/previous image with `wheel=navigate` in the settings file
