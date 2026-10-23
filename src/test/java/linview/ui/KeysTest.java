@@ -66,8 +66,15 @@ class KeysTest {
         assertNull(Keys.actionFor(KeyCode.B, false, true, false));   // Shift only where listed
         assertNull(plain(KeyCode.H));   // fit height has no key (Marcos, 2026-10-22)
         assertEquals(Action.ZOOM_LOCK, Keys.actionFor(KeyCode.L, true, true, false));   // R-ZOOM-02, FastStone
-        assertNull(plain(KeyCode.L));
         assertNull(Keys.actionFor(KeyCode.L, true, false, false));
+    }
+
+    /** R-VIEW-01. */
+    @Test
+    void rotateKeys() {
+        assertEquals(Action.ROTATE_RIGHT, plain(KeyCode.R));
+        assertEquals(Action.ROTATE_LEFT, plain(KeyCode.L));
+        assertNull(Keys.actionFor(KeyCode.R, true, false, false));
     }
 
     @Test

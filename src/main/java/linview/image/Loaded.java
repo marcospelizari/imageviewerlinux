@@ -25,6 +25,11 @@ public record Loaded<I>(I image, double width, double height, Orientation orient
         return image == null;
     }
 
+    /** The same image turned a further {@code quarterTurns} × 90° clockwise (R-VIEW-01). */
+    public Loaded<I> rotated(int quarterTurns) {
+        return new Loaded<>(image, width, height, orientation.rotated(quarterTurns));
+    }
+
     /** Size of the image as shown upright, at actual size. */
     public double uprightWidth() {
         return orientation.swapsSides() ? height : width;

@@ -209,6 +209,29 @@ public final class ViewerController<I> {
         saveLockedZoom();
     }
 
+    /** R: turns the image on screen 90° clockwise (R-VIEW-01). */
+    public void rotateRight() {
+        rotate(1);
+    }
+
+    /** L: 90° anticlockwise. */
+    public void rotateLeft() {
+        rotate(-1);
+    }
+
+    /**
+     * In the view only, the file is not changed. The zoom starts again from the mode, at the top; the next image
+     * opens as its EXIF says. While the next image is still loading nothing happens: the image on screen is no
+     * longer the selected one (review R7).
+     */
+    private void rotate(int quarterTurns) {
+        if (shown == null || shownRequest != request) {
+            return;
+        }
+        shown = shown.rotated(quarterTurns);
+        applyMode();
+    }
+
     /** Drag (R-ZOOM-05): moves the image by ({@code dx}, {@code dy}), only where it's larger than the window. */
     public void pan(double dx, double dy) {
         if (view == null || !canLayOut()) {

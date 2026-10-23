@@ -44,6 +44,7 @@ class ViewerControllerTest {
     private final List<String> warnings = new ArrayList<>();
     private String shownImage;
     private Zoom.View shownView;
+    private Orientation shownOrientation;
     private String message;
     private String title;
     private Settings settings;
@@ -71,6 +72,7 @@ class ViewerControllerTest {
                     public void showImage(String image, Orientation orientation, Zoom.View view) {
                         shownImage = image;
                         shownView = view;
+                        shownOrientation = orientation;
                         message = null;
                     }
 
@@ -219,6 +221,72 @@ class ViewerControllerTest {
         controller.showOpenHintIfEmpty();
         assertNull(message);
         assertEquals(folder, controller.startFolder());
+    }
+
+    /** R-VIEW-01: R turns the view, width and height swap, the zoom starts again from fit. */
+    @Test
+    void rotateTurnsTheViewAndRefits() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);
+        controller.rotateRight();
+        assertEquals(new Orientation(90, false), shownOrientation);
+        assertEquals(1080.0 / 3840, shownView.scale(), 1e-9);   // now 2160×3840, fitted to the height
+        assertTrue(title.contains("2160×3840"), title);
+        controller.rotateLeft();
+        controller.rotateLeft();
+        assertEquals(new Orientation(270, false), shownOrientation);
+        assertEquals(0, loads.size() - 1, "no reload");
+    }
+
+    @Test
+    void rotateDropsHandZoomAndKeepsTheLock() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);
+        controller.zoomIn();
+        controller.rotateRight();
+        assertEquals(1080.0 / 3840, shownView.scale(), 1e-9);
+
+        settings.setZoomMode(Zoom.Mode.LOCK);
+        settings.setZoomPercent(70);
+        controller.rotateRight();
+        assertEquals(0.7, shownView.scale(), 1e-9);
+        assertEquals(0, shownView.y(), 1e-9);   // larger than the window: starts at the top (R-ZOOM-03)
+    }
+
+    @Test
+    void theNextImageIsNotRotated() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);
+        controller.rotateRight();
+        controller.next();
+        lastLoad().finish(3840, 2160);
+        assertEquals(Orientation.UPRIGHT, shownOrientation);
+        controller.previous();
+        lastLoad().finish(3840, 2160);
+        assertEquals(Orientation.UPRIGHT, shownOrientation);   // not remembered either
+    }
+
+    /** Review R7: while b loads, a is still on screen but no longer selected; R / L do nothing. */
+    @Test
+    void rotateWaitsWhileTheNextImageLoads() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);
+        controller.next();
+        controller.rotateRight();
+        assertEquals(Orientation.UPRIGHT, shownOrientation);
+        lastLoad().finish(800, 600);
+        assertEquals("b.jpg", shownImage);
+        assertEquals(Orientation.UPRIGHT, shownOrientation);
+    }
+
+    @Test
+    void rotateWithoutAnImageDoesNothing() {
+        controller.rotateRight();
+        assertNull(shownImage);
+        controller.open(folder);
+        lastLoad().done().accept(Loaded.failed());
+        controller.rotateRight();
+        assertNull(shownImage);
     }
 
     @Test
