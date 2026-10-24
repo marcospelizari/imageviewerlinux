@@ -20,6 +20,7 @@ A fast image viewer for Linux, inspired by FastStone Image Viewer.
 - R / L turn the image on screen 90° right / left; the file is not changed, and the next image opens upright again
 - Window title shows the file name, its position in the folder, the image size and the zoom %
 - The window opens on the monitor under the mouse pointer; Enter toggles full-screen, where the mouse pointer hides after 2 s without movement
+- In full-screen, moving the mouse to the top edge shows a thumbnail strip of the folder; click a thumbnail to open it. Thumbnails are shared with your file manager (`~/.cache/thumbnails`)
 
 ## Roadmap
 | Version | Contents |

@@ -16,6 +16,7 @@ import javafx.stage.Stage;
 
 import linview.image.ImageLoader;
 import linview.image.Loaded;
+import linview.image.ThumbnailLoader;
 import linview.settings.Settings;
 import linview.settings.SettingsStore;
 import linview.ui.ViewerWindow;
@@ -45,6 +46,7 @@ public class App extends Application {
 
     private ViewerController<Image> controller;
     private ImageLoader loader;
+    private ThumbnailLoader thumbnails;
     /**
      * Lists folders off the JavaFX thread (#21). Two at a time, so one slow folder (USB, network) doesn't hold up the
      * next (#55); at most one more waits, and a newer open replaces it, so stalled folders can't pile up threads (#57).
@@ -84,7 +86,8 @@ public class App extends Application {
                 loader.preload(files, minResolution);
             }
         };
-        ViewerWindow window = new ViewerWindow(stage);
+        thumbnails = new ThumbnailLoader();
+        ViewerWindow window = new ViewerWindow(stage, thumbnails);
         controller = new ViewerController<>(settings, store, source, window, timing, folders, Platform::runLater);
         window.show(controller, settings);
 
@@ -99,6 +102,9 @@ public class App extends Application {
     public void stop() {
         if (loader != null) {
             loader.close();
+        }
+        if (thumbnails != null) {
+            thumbnails.close();
         }
         folders.shutdownNow();
         store.close();   // writes a change still pending

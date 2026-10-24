@@ -77,6 +77,8 @@ public final class ViewerPane extends StackPane {
     private final PauseTransition idle = new PauseTransition(POINTER_IDLE);
     private boolean pointerHidden;
     private boolean fullScreen;
+    /** A full-screen panel is open (#27): the pointer stays. */
+    private boolean pointerKept;
     private double dragX;
     private double dragY;
 
@@ -150,11 +152,17 @@ public final class ViewerPane extends StackPane {
         });
     }
 
+    /** While a full-screen panel is open the pointer doesn't hide (#27). */
+    void keepPointer(boolean keep) {
+        pointerKept = keep;
+        pointerMoved();
+    }
+
     /** The pointer shows again; in full-screen it hides once the mouse rests for {@link #POINTER_IDLE}. */
     private void pointerMoved() {
         pointerHidden = false;
         updateCursor();
-        if (fullScreen) {
+        if (fullScreen && !pointerKept) {
             idle.playFromStart();
         } else {
             idle.stop();

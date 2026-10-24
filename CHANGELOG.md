@@ -4,6 +4,7 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 
 ## [Unreleased]
 ### Added
+- Full-screen thumbnail strip at the top: rest the mouse at the top edge for 200 ms and it slides in over the image (the image doesn't move); it slides back 300 ms after the mouse leaves. The selected image is highlighted and scrolled into view; the wheel scrolls the strip; a click opens an image. Thumbnails, 120 points tall, come from the freedesktop cache (`~/.cache/thumbnails/large`, shared with Dolphin and other file managers) or are made on a background thread of their own, turned upright, and stored there. Only the thumbnails in view are asked for, so a large folder opens at once. Images that would need more than 300 MB to decode get no thumbnail. The strip never takes the keyboard: ← → keep moving through the images. In a window there is no strip (#27, #28)
 - Background colour from the settings file (`background`): around the image and behind its transparent parts, in a window and in full-screen. Presets `black` (default), `darkgrey` (#333333), `grey` (#808080), `white`, or `#RRGGBB`. Messages turn dark on a light background (#31)
 - In full-screen the mouse pointer hides after 2 s without movement and comes back when the mouse moves (#33)
 

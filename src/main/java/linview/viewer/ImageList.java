@@ -85,6 +85,11 @@ public final class ImageList {
         return files.size();
     }
 
+    /** The folder's images in order; the same list for every position in this folder (the thumbnail strip, #28). */
+    List<Path> files() {
+        return files;
+    }
+
     /** The next image; at the last image it stays there (R-NAV-04), returning this same list. */
     ImageList next() {
         return at(index + 1);
@@ -125,7 +130,8 @@ public final class ImageList {
         }
     }
 
-    private ImageList at(int newIndex) {
+    /** The image at {@code newIndex} (0-based), clamped to the folder. */
+    ImageList at(int newIndex) {
         int clamped = Math.max(0, Math.min(newIndex, files.size() - 1));
         return clamped == index || files.isEmpty() ? this : new ImageList(folder, files, clamped);
     }
