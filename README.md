@@ -14,6 +14,7 @@ A fast image viewer for Linux, inspired by FastStone Image Viewer.
 - Ctrl + mouse wheel zooms at the mouse pointer; drag with the left button to move an image larger than the window (grab-hand cursor). Resizing the window or switching full-screen keeps your place
 - Zoom lock (Ctrl+Shift+L): every next image opens at the same zoom %, at its top; + / − change the locked %. Remembered after a restart
 - Photos are turned upright using their EXIF orientation
+- Images shown smaller than their size are redrawn sharp (Lanczos) a moment after zooming stops
 - Actual size (100 %) is one image pixel per screen pixel at any desktop scaling (e.g. 200 % on a 4K monitor)
 - The next images are loaded in the background and recently seen ones kept (up to 300 MB), so they show at once. Very large images are decoded only as large as needed; one too large for memory shows a message
 - R / L turn the image on screen 90° right / left; the file is not changed, and the next image opens upright again
