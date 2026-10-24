@@ -21,6 +21,7 @@ A fast image viewer for Linux, inspired by FastStone Image Viewer.
 - Window title shows the file name, its position in the folder, the image size and the zoom %
 - The window opens on the monitor under the mouse pointer, as it was closed (full-screen, or the same size and place); Enter toggles full-screen, where the mouse pointer hides after 2 s without movement
 - In full-screen, moving the mouse to the top edge shows a thumbnail strip of the folder; click a thumbnail to open it. Thumbnails are shared with your file manager (`~/.cache/thumbnails`)
+- In full-screen, the bottom edge at the left shows a small taskbar: previous / next, − / zoom % / +, Fit / 100% / Lock, and the image size; type a % and press Enter. A small `2/16` in a corner shows where you are in the folder
 
 ## Roadmap
 | Version | Contents |
@@ -96,7 +97,9 @@ Edit it while linview is closed. Most settings are used by features that are sti
 | `zoom.percent` | zoom % used by `lock`, 1–200 | `100` |
 | `wheel` | `scroll` (wheel scrolls the image, stops at its edges) / `navigate` (wheel down = next image, up = previous) | `scroll` |
 | `background` | `black`, `darkgrey` (#333333), `grey` (#808080), `white` or `#RRGGBB`: around the image and behind its transparent parts | `black` |
-| `overlay.fileName` | `true` / `false`: file name in full-screen | `true` |
+| `overlay.counter` | `true` / `false`: position `2/16` in the full-screen overlay | `true` |
+| `overlay.fileName` | `true` / `false`: file name in the full-screen overlay | `false` |
+| `overlay.corner` | `bottom-left`, `bottom-right`, `top-left`, `top-right`: where the overlay goes | `bottom-left` |
 | `start.fullScreen` | `true` / `false`: start in full-screen; saved on closing | `false` |
 | `window.x`, `window.y` | window position, saved on closing; used when the mouse is on that monitor at start, else the window is centred on the mouse's monitor | empty |
 | `window.width`, `window.height` | window size, at least 200; saved on closing | `1024`, `700` |

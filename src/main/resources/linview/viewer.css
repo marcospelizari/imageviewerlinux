@@ -33,3 +33,44 @@
     -fx-background-color: rgba(255, 255, 255, 0.35);
     -fx-background-radius: 4;
 }
+
+/* Full-screen taskbar (#29): one compact bar at the bottom-left, only as wide as its contents. */
+.taskbar {
+    -fx-background-color: rgba(0, 0, 0, 0.7);
+    -fx-background-radius: 0 6 0 0;
+    -fx-padding: 6 10 6 8;
+}
+
+.taskbar .button {
+    -fx-background-color: rgba(255, 255, 255, 0.12);
+    -fx-text-fill: #e0e0e0;
+    -fx-background-radius: 4;
+    -fx-padding: 3 9 3 9;
+}
+
+.taskbar .button:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.25);
+}
+
+/* Lock while zoom lock is on. */
+.taskbar .button:on {
+    -fx-background-color: rgba(120, 170, 255, 0.55);
+    -fx-text-fill: white;
+}
+
+.taskbar-percent {
+    -fx-background-color: rgba(255, 255, 255, 0.9);
+    -fx-alignment: center-right;
+}
+
+.taskbar-size {
+    -fx-text-fill: #e0e0e0;
+    -fx-padding: 0 0 0 8;
+}
+
+/* Full-screen overlay (#45): small, light text with a dark outline, readable on light and dark images. */
+.overlay {
+    -fx-text-fill: rgba(255, 255, 255, 0.85);
+    -fx-font-size: 14px;
+    -fx-effect: dropshadow(gaussian, black, 3, 0.9, 0, 0);
+}

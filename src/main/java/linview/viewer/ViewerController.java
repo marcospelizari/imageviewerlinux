@@ -77,12 +77,27 @@ public final class ViewerController<I> {
          * when nothing is open. The list is the same object while the folder stays open.
          */
         void showPosition(List<Path> files, int index);
+
+        /**
+         * The image's size as shown upright and its zoom %, with the lock state, for the taskbar (#29); a size of 0
+         * when no image is shown.
+         */
+        void showZoom(double width, double height, double percent, boolean locked);
     }
 
     /**
      * {@code name — n/N — W×H — zoom% — linview}, with {@code (locked)} after the zoom while zoom lock is on;
      * size and zoom are left out while they aren't known yet ({@code width <= 0}, {@code scale <= 0}).
      */
+    /**
+     * The full-screen overlay (R-VIEW-04, R-FS-05, #45): {@code 2/16}, with {@code fileName} {@code a.jpg  2/16};
+     * empty when both are off.
+     */
+    public static String overlayText(String name, int position, int size, boolean counter, boolean fileName) {
+        String count = counter ? position + "/" + size : "";
+        return fileName && counter ? name + "  " + count : fileName ? name : count;
+    }
+
     static String title(String name, int position, int size, double width, double height, double scale,
                         boolean locked) {
         String dimensions = width > 0 ? String.format(" — %.0f×%.0f", width, height) : "";
@@ -301,6 +316,12 @@ public final class ViewerController<I> {
      * One zoom step keeping the point at ({@code x}, {@code y}) in place, e.g. under the mouse (R-ZOOM-05).
      * Without zoom lock only the image on screen changes; with it, the locked % changes too and is saved.
      */
+    /** A zoom % typed in the taskbar (#29): like + / −, around the middle of the window. */
+    public void zoomToPercent(double percent) {
+        zoomTo(Math.max(Zoom.MIN_PERCENT, Math.min(Zoom.MAX_PERCENT, percent)) / 100, viewWidth / 2, viewHeight / 2);
+        saveLockedZoom();
+    }
+
     public void zoomInAt(double x, double y) {
         zoomTo(view == null ? 0 : Zoom.zoomIn(view.scale()), x, y);
         saveLockedZoom();
@@ -440,6 +461,7 @@ public final class ViewerController<I> {
         view = null;
         display.showTitle(TITLE);
         display.showPosition(List.of(), -1);
+        display.showZoom(0, 0, 0, false);
         display.showMessage(message);
     }
 
@@ -530,8 +552,10 @@ public final class ViewerController<I> {
         // While the next image is still loading, its own title (without size) stays.
         if (shownRequest == request) {
             Path file = images.current();
+            boolean locked = settings.zoomMode() == Zoom.Mode.LOCK;
             display.showTitle(title(file.getFileName().toString(), images.position(), images.size(),
-                    shown.uprightWidth(), shown.uprightHeight(), v.scale(), settings.zoomMode() == Zoom.Mode.LOCK));
+                    shown.uprightWidth(), shown.uprightHeight(), v.scale(), locked));
+            display.showZoom(shown.uprightWidth(), shown.uprightHeight(), percentOf(v.scale()), locked);
             if (timingPending) {
                 timingPending = false;
                 timing.shown(file.getFileName().toString(), requestStart, shown.loadMillis(), shown.cached());

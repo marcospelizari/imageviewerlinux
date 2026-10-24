@@ -14,6 +14,10 @@ import javafx.scene.image.Image;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextInputControl;
 import javafx.scene.layout.StackPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
@@ -27,7 +31,8 @@ import linview.viewer.Zoom;
 
 /**
  * The window (#53): Stage and Scene, the Open dialog and full-screen, and what the controller shows. Every action goes
- * through {@link #execute}: keys call it now, the taskbar, panels and menu later (REPORT.md §4.2). What an action does
+ * through {@link #execute}: keys, the taskbar and later the menu call it (REPORT.md §4.2). In full-screen the panels
+ * (#27–#29) and the overlay (#45) float over the image. What an action does
  * to the viewing stays in {@link ViewerController}; this class only adds what belongs to the window.
  */
 public final class ViewerWindow implements ViewerController.Display<Image> {
@@ -38,12 +43,19 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
     private final Stage stage;
     private final ViewerPane viewer = new ViewerPane();
     private final ThumbStrip strip;
+    private final Taskbar taskbar;
+    /** The full-screen overlay (#45): {@code 2/16}, optionally with the file name. */
+    private final Label overlay = new Label();
+    private boolean taskbarOpen;
+    private Settings settings;
     private ViewerController<Image> controller;
 
     /** {@code thumbnails} fills the full-screen thumbnail strip (#28). */
     public ViewerWindow(Stage stage, ThumbnailLoader thumbnails) {
         this.stage = stage;
         strip = new ThumbStrip(thumbnails, index -> controller.select(index));
+        taskbar = new Taskbar(this::execute, percent -> controller.zoomToPercent(percent), () -> viewer.requestFocus());
+        overlay.getStyleClass().add("overlay");
     }
 
     static String iconPath(int size) {
@@ -65,11 +77,31 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
         viewer.connect(controller, stage);
         viewer.setBackgroundColour(settings.backgroundColour());
 
+        this.settings = settings;
         EdgePanels panels = new EdgePanels(stage, viewer);
-        panels.setTop(strip, strip::scrollToCurrent);
+        panels.addTop(strip, strip::scrollToCurrent);
+        panels.addBottomLeft(taskbar, taskbar::isTyping, open -> {
+            taskbarOpen = open;
+            if (!open && taskbar.isTyping()) {
+                viewer.requestFocus();
+            }
+            updateOverlay();
+        });
+        StackPane overlayLayer = new StackPane(overlay);
+        overlayLayer.setMouseTransparent(true);
+        Settings.Corner corner = settings.overlayCorner();
+        StackPane.setAlignment(overlay, switch (corner) {
+            case BOTTOM_LEFT -> Pos.BOTTOM_LEFT;
+            case BOTTOM_RIGHT -> Pos.BOTTOM_RIGHT;
+            case TOP_LEFT -> Pos.TOP_LEFT;
+            case TOP_RIGHT -> Pos.TOP_RIGHT;
+        });
+        StackPane.setMargin(overlay, new Insets(12, 16, 12, 16));
+        stage.fullScreenProperty().addListener(obs -> updateOverlay());
         Dimension2D content = WindowPlacement.placeAtStart(stage, settings.windowX(), settings.windowY(),
                 settings.windowWidth(), settings.windowHeight());
-        Scene scene = new Scene(new StackPane(viewer, panels.layer()), content.getWidth(), content.getHeight());
+        Scene scene = new Scene(new StackPane(viewer, overlayLayer, panels.layer()), content.getWidth(),
+                content.getHeight());
         scene.getStylesheets().add(ViewerWindow.class.getResource("/linview/viewer.css").toExternalForm());
         panels.watch(scene);
         scene.setOnKeyPressed(this::keyPressed);
@@ -114,6 +146,9 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
     }
 
     private void keyPressed(KeyEvent e) {
+        if (stage.getScene().getFocusOwner() instanceof TextInputControl) {
+            return;   // typing in the taskbar's % box (§6.4)
+        }
         Keys.Action action = Keys.actionFor(e);
         if (action != null) {
             execute(action);
@@ -179,7 +214,20 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
     }
 
     @Override
+    public void showZoom(double width, double height, double percent, boolean locked) {
+        taskbar.show(width, height, percent, locked);
+    }
+
+    /** Full-screen only, with something to say, and not while the taskbar is open (#45). */
+    private void updateOverlay() {
+        overlay.setVisible(stage.isFullScreen() && !overlay.getText().isEmpty() && !taskbarOpen);
+    }
+
+    @Override
     public void showPosition(List<Path> files, int index) {
         strip.show(files, index);
+        overlay.setText(index < 0 ? "" : ViewerController.overlayText(files.get(index).getFileName().toString(),
+                index + 1, files.size(), settings.counterOverlay(), settings.fileNameOverlay()));
+        updateOverlay();
     }
 }

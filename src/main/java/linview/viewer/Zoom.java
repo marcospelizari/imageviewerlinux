@@ -1,5 +1,7 @@
 package linview.viewer;
 
+import java.util.OptionalDouble;
+
 /**
  * Zoom calculations (R-ZOOM-01, R-ZOOM-03, R-ZOOM-04): the scale for a zoom mode and where a new image starts.
  * No UI, so it can be tested without a screen. Sizes are of the upright image (after EXIF orientation).
@@ -54,6 +56,23 @@ public final class Zoom {
     /** Zoom range in % for + / − and for the locked zoom; more than 200% shows too little of a small image. */
     public static final double MIN_PERCENT = 1;
     public static final double MAX_PERCENT = 200;
+
+    /**
+     * A zoom % typed in the taskbar (#29): {@code 52}, {@code 52%} or {@code 52.5} (a comma works too), within
+     * {@link #MIN_PERCENT}–{@link #MAX_PERCENT}, rounded to one decimal; empty for anything else, which keeps the
+     * zoom.
+     */
+    public static OptionalDouble parsePercent(String text) {
+        String value = text.strip();
+        if (value.endsWith("%")) {
+            value = value.substring(0, value.length() - 1).strip();
+        }
+        if (!value.matches("\\d+([.,]\\d+)?")) {
+            return OptionalDouble.empty();
+        }
+        double percent = Math.round(Double.parseDouble(value.replace(',', '.')) * 10) / 10.0;
+        return percent >= MIN_PERCENT && percent <= MAX_PERCENT ? OptionalDouble.of(percent) : OptionalDouble.empty();
+    }
 
     /** Zoom steps for + / −, in %, from {@link #MIN_PERCENT} to {@link #MAX_PERCENT}. */
     static final double[] STEPS = {1, 2, 3, 5, 8, 10, 15, 20, 25, 33, 50, 67, 75, 100, 125, 150, 200};

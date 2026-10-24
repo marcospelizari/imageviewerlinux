@@ -15,6 +15,9 @@ public final class Settings {
 
     public enum Wheel { SCROLL, NAVIGATE }
 
+    /** Where the full-screen overlay goes (#45); {@code bottom-left} in the file. */
+    public enum Corner { BOTTOM_LEFT, BOTTOM_RIGHT, TOP_LEFT, TOP_RIGHT }
+
     static final List<String> BACKGROUND_PRESETS = List.of("black", "darkgrey", "grey", "white");
     private static final Pattern HEX_COLOUR = Pattern.compile("#[0-9a-f]{6}");
 
@@ -26,7 +29,9 @@ public final class Settings {
     private double zoomPercent = 100;
     private Wheel wheel = Wheel.SCROLL;
     private String background = "black";
-    private boolean fileNameOverlay = true;
+    private boolean fileNameOverlay = false;
+    private boolean counterOverlay = true;
+    private Corner overlayCorner = Corner.BOTTOM_LEFT;
     private boolean fullScreen = false;
     private Double windowX = null;
     private Double windowY = null;
@@ -94,6 +99,23 @@ public final class Settings {
 
     public void setFileNameOverlay(boolean show) {
         fileNameOverlay = show;
+    }
+
+    /** The position {@code 2/16} in the full-screen overlay (R-VIEW-04, #45), on by default. */
+    public boolean counterOverlay() {
+        return counterOverlay;
+    }
+
+    public void setCounterOverlay(boolean show) {
+        counterOverlay = show;
+    }
+
+    public Corner overlayCorner() {
+        return overlayCorner;
+    }
+
+    public void setOverlayCorner(Corner corner) {
+        overlayCorner = require(corner, "overlay corner");
     }
 
     /** Start mode "last used" (R-FS-02): full-screen if the app was closed in full-screen. */

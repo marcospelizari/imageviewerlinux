@@ -37,7 +37,9 @@ class SettingsStoreTest {
         assertEquals(100, s.zoomPercent());
         assertEquals(Settings.Wheel.SCROLL, s.wheel());
         assertEquals("black", s.background());
-        assertTrue(s.fileNameOverlay());
+        assertFalse(s.fileNameOverlay());   // off by default since #45
+        assertTrue(s.counterOverlay());
+        assertEquals(Settings.Corner.BOTTOM_LEFT, s.overlayCorner());
         assertFalse(s.fullScreen());
         assertNull(s.windowX());
         assertNull(s.windowY());
@@ -64,7 +66,9 @@ class SettingsStoreTest {
         s.setZoomPercent(52.5);
         s.setWheel(Settings.Wheel.NAVIGATE);
         s.setBackground("#202020");
-        s.setFileNameOverlay(false);
+        s.setFileNameOverlay(true);
+        s.setCounterOverlay(false);
+        s.setOverlayCorner(Settings.Corner.TOP_RIGHT);
         s.setFullScreen(true);
         s.setWindowPosition(1930.0, -10.0);
         s.setWindowWidth(800);
@@ -78,7 +82,9 @@ class SettingsStoreTest {
         assertEquals(52.5, loaded.zoomPercent());
         assertEquals(Settings.Wheel.NAVIGATE, loaded.wheel());
         assertEquals("#202020", loaded.background());
-        assertFalse(loaded.fileNameOverlay());
+        assertTrue(loaded.fileNameOverlay());
+        assertFalse(loaded.counterOverlay());
+        assertEquals(Settings.Corner.TOP_RIGHT, loaded.overlayCorner());
         assertTrue(loaded.fullScreen());
         assertEquals(1930.0, loaded.windowX());
         assertEquals(-10.0, loaded.windowY());
@@ -104,6 +110,8 @@ class SettingsStoreTest {
                 "wheel=sideways",
                 "background=#12345",
                 "overlay.fileName=1",
+                "overlay.counter=yes",
+                "overlay.corner=middle",
                 "start.fullScreen=maybe",
                 "window.x=left",
                 "window.y=10",
@@ -111,18 +119,20 @@ class SettingsStoreTest {
                 "window.height=tall"));
 
         assertDefaults(load(file));
-        assertEquals(9, warnings.size(), warnings.toString());   // window.y is valid, but useless without x
+        assertEquals(11, warnings.size(), warnings.toString());   // window.y is valid, but useless without x
     }
 
     @Test
     void valuesAreTrimmedAndCaseInsensitive(@TempDir Path folder) throws IOException {
         Path file = Files.writeString(folder.resolve("settings.properties"),
-                "zoom.mode = Width \nwheel=NAVIGATE\nbackground= DarkGrey\noverlay.fileName=FALSE\n");
+                "zoom.mode = Width \nwheel=NAVIGATE\nbackground= DarkGrey\noverlay.fileName=TRUE\n"
+                        + "overlay.corner= Bottom-Right\n");
         Settings s = load(file);
         assertEquals(Zoom.Mode.WIDTH, s.zoomMode());
         assertEquals(Settings.Wheel.NAVIGATE, s.wheel());
         assertEquals("darkgrey", s.background());
-        assertFalse(s.fileNameOverlay());
+        assertTrue(s.fileNameOverlay());
+        assertEquals(Settings.Corner.BOTTOM_RIGHT, s.overlayCorner());
         assertTrue(warnings.isEmpty(), warnings.toString());
     }
 
