@@ -394,6 +394,23 @@ class ViewerControllerTest {
         assertEquals("", ViewerController.overlayText("a.jpg", 2, 16, false, false));
     }
 
+    /** #32: the magnifier asks for the full image of a screen-size copy, once; a whole image needs nothing. */
+    @Test
+    void theMagnifierLoadsTheFullImageOfACopy() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160, 0.5);
+        controller.loadFullResolution();
+        assertTrue(lastLoad().full());
+        assertEquals(2, loads.size());
+        controller.loadFullResolution();
+        assertEquals(2, loads.size());
+
+        controller.next();
+        lastLoad().finish(800, 600);
+        controller.loadFullResolution();
+        assertEquals(3, loads.size());
+    }
+
     /** The full image belongs to one image: moving on cancels it, and a late one is ignored. */
     @Test
     void theFullImageOfAPreviousImageIsCancelledAndIgnored() {

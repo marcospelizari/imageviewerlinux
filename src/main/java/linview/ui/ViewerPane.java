@@ -10,14 +10,17 @@ import javafx.beans.InvalidationListener;
 import javafx.scene.Cursor;
 import javafx.scene.Group;
 import javafx.scene.control.Label;
+import javafx.scene.effect.DropShadow;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelFormat;
 import javafx.scene.image.WritableImage;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.ScrollEvent;
+import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Circle;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Stage;
 import javafx.util.Duration;
@@ -45,12 +48,33 @@ import linview.viewer.Zoom;
  *
  * <p>In full-screen the mouse pointer hides after {@link #POINTER_IDLE} without movement and returns when the mouse
  * moves (R-FS-08, #33).
+ *
+ * <p>Magnifier (R-FS-07, #32): while the whole image fits the window, holding the left button shows a round loupe
+ * at {@link #LOUPE_ZOOM} times actual size under the mouse; when the image is larger, the left button pans instead
+ * (Marcos, 2026-10-24). It shows the image on screen, unsmoothed so its real pixels show, and asks for the full
+ * image if a screen-size copy is shown (#22).
  */
 public final class ViewerPane extends StackPane {
 
     private final ImageView view = new ImageView();
     /** Holds the turned image, so its layout bounds are the upright size and it can be placed by its corner. */
     private final Group turned = new Group(view);
+
+    static final double LOUPE_RADIUS = 150;
+    /** Screen pixels per image pixel in the loupe: 2 = twice actual size. */
+    static final double LOUPE_ZOOM = 2;
+    private final ImageView lensView = new ImageView();
+    private final Group lensTurned = new Group(lensView);
+    private final Circle lensClip = new Circle(LOUPE_RADIUS);
+    private final Circle lensRing = new Circle(LOUPE_RADIUS);
+    /** Covers the pane, so its coordinates are the pane's; clipped to the loupe's circle. */
+    private final Pane lens = new Pane(lensTurned);
+    /** What is on screen, for the loupe; {@code null} while a message is shown. */
+    private Loaded<Image> shownLoaded;
+    private Zoom.View shownView;
+    private boolean magnifying;
+    private double loupeX;
+    private double loupeY;
     private final Label message = new Label();
     private ViewerController<Image> controller;
     /** Physical pixels per JavaFX pixel. */
@@ -91,7 +115,19 @@ public final class ViewerPane extends StackPane {
         clip.widthProperty().bind(widthProperty());
         clip.heightProperty().bind(heightProperty());
         setClip(clip);
-        getChildren().addAll(turned, message);
+        lensView.setSmooth(false);
+        lensTurned.setManaged(false);
+        lens.setClip(lensClip);
+        lensRing.setManaged(false);
+        lensRing.setMouseTransparent(true);
+        lensRing.setVisible(false);
+        lensRing.setFill(null);
+        lensRing.setStroke(Color.web("#ffffff", 0.8));
+        lensRing.setStrokeWidth(2);
+        lensRing.setEffect(new DropShadow(6, Color.BLACK));
+        lens.setMouseTransparent(true);
+        lens.setVisible(false);
+        getChildren().addAll(turned, lens, lensRing, message);
 
         setOnScroll(this::scrolled);
         setOnMousePressed(e -> {
@@ -100,11 +136,18 @@ public final class ViewerPane extends StackPane {
                 dragX = e.getX();
                 dragY = e.getY();
                 updateCursor();
+            } else if (e.getButton() == MouseButton.PRIMARY && shownLoaded != null) {
+                magnifying = true;
+                controller.loadFullResolution();
+                showLoupe(e.getX(), e.getY());
             }
         });
         setOnMouseMoved(e -> pointerMoved());
         setOnMouseDragged(e -> {
             pointerMoved();
+            if (magnifying) {
+                showLoupe(e.getX(), e.getY());
+            }
             if (dragging) {
                 controller.pan((e.getX() - dragX) * scale, (e.getY() - dragY) * scale);
                 dragX = e.getX();
@@ -115,6 +158,9 @@ public final class ViewerPane extends StackPane {
             if (e.getButton() == MouseButton.PRIMARY && dragging) {
                 dragging = false;
                 updateCursor();
+            }
+            if (e.getButton() == MouseButton.PRIMARY && magnifying) {
+                hideLoupe();
             }
         });
         idle.setOnFinished(e -> {
@@ -215,10 +261,53 @@ public final class ViewerPane extends StackPane {
         double height = loaded.uprightHeight() * v.scale() / scale;
         // Half a pixel of slack: a fit image is not pannable because of rounding.
         setPannable(width > getWidth() + 0.5 || height > getHeight() + 0.5);
+        shownLoaded = loaded;
+        shownView = v;
+        if (magnifying) {
+            showLoupe(loupeX, loupeY);   // e.g. the full image arrived
+        }
+    }
+
+    private void hideLoupe() {
+        magnifying = false;
+        lens.setVisible(false);
+        lensRing.setVisible(false);
+        lensView.setImage(null);
+    }
+
+    /** The loupe centred on ({@code x}, {@code y}), showing the image point under it. */
+    private void showLoupe(double x, double y) {
+        loupeX = x;
+        loupeY = y;
+        Loaded<Image> loaded = shownLoaded;
+        Zoom.View v = shownView;
+        if (loaded == null || v == null) {
+            return;
+        }
+        Orientation orientation = loaded.orientation();
+        lensView.setImage(loaded.image());   // the decoded image, never the shrunk sharp copy
+        lensView.setScaleX(orientation.mirror() ? -1 : 1);
+        lensView.setRotate(orientation.degrees());
+        double perPixel = LOUPE_ZOOM / scale;   // JavaFX pixels per image pixel
+        lensView.setFitWidth(loaded.width() * perPixel);
+        lensView.setFitHeight(loaded.height() * perPixel);
+        // The image point under the mouse, in upright image pixels.
+        double imageX = (x * scale - Math.round(v.x())) / v.scale();
+        double imageY = (y * scale - Math.round(v.y())) / v.scale();
+        lensTurned.relocate(x - imageX * perPixel, y - imageY * perPixel);
+        lensClip.setCenterX(x);
+        lensClip.setCenterY(y);
+        lensRing.setCenterX(x);
+        lensRing.setCenterY(y);
+        lens.setVisible(true);
+        lensRing.setVisible(true);
     }
 
     public void showMessage(String text) {
         stopRedraw();
+        shownLoaded = null;
+        shownView = null;
+        hideLoupe();
         view.setImage(null);
         message.setText(text);
         setPannable(false);

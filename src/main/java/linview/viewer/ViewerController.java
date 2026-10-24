@@ -575,7 +575,21 @@ public final class ViewerController<I> {
      * full image, once, for this image only. Until it arrives the copy stays, stretched.
      */
     private void loadFullIfNeeded(Path file, Zoom.View v) {
-        if (fullRequested || v.scale() <= shown.resolution() * FULL_RESOLUTION_SLACK) {
+        if (v.scale() <= shown.resolution() * FULL_RESOLUTION_SLACK) {
+            return;
+        }
+        loadFull(file);
+    }
+
+    /** The magnifier needs every pixel (#32): the full image of a screen-size copy, as a zoom past it would. */
+    public void loadFullResolution() {
+        if (images != null && shown != null && shownRequest == request && shown.resolution() < 1) {
+            loadFull(images.current());
+        }
+    }
+
+    private void loadFull(Path file) {
+        if (fullRequested) {
             return;
         }
         fullRequested = true;
