@@ -39,6 +39,14 @@ Requires Linux and Java 21. The Gradle wrapper downloads everything else.
 
 Use an absolute path with `--args`: Gradle runs the app from the project folder.
 
+To measure speed, add `--timing`: each image writes a line like `timing  photo.jpg  shown 120.0 ms  load 100.0 ms`
+to the terminal (`shown` = from the key press until the image is on its way to the screen, `load` = decoding),
+and closing the app prints the median, the time 9 of 10 images were shown within, and the peak Java heap.
+
+```sh
+./gradlew run --args="--timing $HOME/Pictures"
+```
+
 On KDE Plasma (Wayland), turn on *System Settings → Window Management → Window Behavior → Multiscreen behaviour → Active screen follows mouse*,
 so new windows open on the monitor with the mouse pointer.
 

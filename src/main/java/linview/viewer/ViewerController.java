@@ -67,6 +67,7 @@ public final class ViewerController<I> {
     private final SettingsStore store;
     private final ImageSource<I> source;
     private final Display<I> display;
+    private final TimingLog timing;
 
     /** The open folder; {@code null} when nothing is open. */
     private ImageList images;
@@ -89,12 +90,17 @@ public final class ViewerController<I> {
     private Zoom.Mode modeBeforeLock = Zoom.Mode.FIT;
     private double viewWidth;
     private double viewHeight;
+    /** When the current image was asked for, and whether it still has to be logged as shown (#23). */
+    private long requestStart;
+    private boolean timingPending;
 
-    public ViewerController(Settings settings, SettingsStore store, ImageSource<I> source, Display<I> display) {
+    public ViewerController(Settings settings, SettingsStore store, ImageSource<I> source, Display<I> display,
+                            TimingLog timing) {
         this.settings = settings;
         this.store = store;
         this.source = source;
         this.display = display;
+        this.timing = timing;
     }
 
     /** Opens a folder, or an image and its folder (R-NAV-01); problems are shown as a message. */
@@ -330,6 +336,7 @@ public final class ViewerController<I> {
     private void nothingOpen(String message) {
         images = null;
         request++;
+        timingPending = false;
         cancel.run();
         shown = null;
         view = null;
@@ -339,6 +346,8 @@ public final class ViewerController<I> {
 
     /** Starts loading the current image; the one on screen stays until the new one is ready. */
     private void showCurrent() {
+        requestStart = timing.now();
+        timingPending = true;
         Path file = images.current();
         display.showTitle(title(file.getFileName().toString(), images.position(), images.size(), 0, 0, 0, false));
         // The new request is current before loading starts, so a result that arrives at once is accepted and a
@@ -354,6 +363,8 @@ public final class ViewerController<I> {
             return;
         }
         if (result.isFailed()) {
+            timingPending = false;
+            timing.failed(file.getFileName().toString(), requestStart);
             shown = null;
             view = null;
             display.showMessage("Can't show " + file.getFileName() + ": the file is damaged or not a supported image");
@@ -415,6 +426,10 @@ public final class ViewerController<I> {
             Path file = images.current();
             display.showTitle(title(file.getFileName().toString(), images.position(), images.size(),
                     shown.uprightWidth(), shown.uprightHeight(), v.scale(), settings.zoomMode() == Zoom.Mode.LOCK));
+            if (timingPending) {
+                timingPending = false;
+                timing.shown(file.getFileName().toString(), requestStart, shown.loadMillis());
+            }
         }
     }
 }

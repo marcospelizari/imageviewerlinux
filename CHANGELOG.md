@@ -4,6 +4,10 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 
 ## [Unreleased]
 ### Added
+- Timing log, off by default: `--timing` on the command line writes one line per image to standard error (`shown` = from the key press until the image is handed to the window, `load` = the loader's own time, or `failed after`), and on closing, also with Ctrl+C, a summary: the median, the time 9 of 10 images were shown within, and the peak of each Java heap pool (#23)
+
+## [0.1.0] - 2026-10-24 - Phase 2
+### Added
 - The window opens on the monitor under the mouse pointer (#25)
 - Application icon in the window and taskbar, PNG 16–512 px (#40)
 - Natural sort of a folder's images: `img2` before `img10`, case-insensitive, hidden files skipped (#3)
