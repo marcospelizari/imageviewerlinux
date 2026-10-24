@@ -8,6 +8,11 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.Locale;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 import linview.viewer.Zoom;
@@ -17,6 +22,10 @@ import linview.viewer.Zoom;
  * an unreadable file or an invalid value gives the default plus a warning, never a crash. The rules for a valid
  * value are the {@link Settings} setters; this class only turns text into values and back. No UI, so it can be
  * tested without a screen. Keys are documented in README.md.
+ *
+ * <p>It is the one writer of the file (#52): {@link #save} returns at once and one background thread writes, so no
+ * file I/O happens on the JavaFX thread; quick saves in a row (a touchpad zooming with zoom lock on) end in one
+ * write of the newest values. {@link #close} writes what is still pending when the app closes.
  */
 public final class SettingsStore {
 
@@ -28,8 +37,21 @@ public final class SettingsStore {
 
     private final Path file;
     private final Consumer<String> warn;
+    private final ExecutorService writer = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "linview-settings");
+        thread.setDaemon(true);   // never keeps the app running; close() writes what's pending
+        return thread;
+    });
+    /** The newest file text not written yet; {@code null} when nothing is waiting. */
+    private final AtomicReference<String> pending = new AtomicReference<>();
+    private volatile boolean lastSaved = true;
+    /** Files written, for tests. */
+    final AtomicInteger writes = new AtomicInteger();
 
-    /** {@code warn} receives each problem: an unreadable file, an invalid value or a failed save. */
+    /**
+     * {@code warn} receives each problem: an unreadable file, an invalid value or a failed save. A failed save is
+     * reported from the writer thread.
+     */
     public SettingsStore(Path file, Consumer<String> warn) {
         this.file = file;
         this.warn = warn;
@@ -77,24 +99,60 @@ public final class SettingsStore {
     }
 
     /**
-     * Writes every setting, creating the folder. The file is written next to it first and then moved into place,
-     * so a failed save leaves the old settings intact. A failure is passed to {@code warn}; the app keeps running.
-     *
-     * @return whether the settings were saved
+     * Saves every setting in the background. The values are copied now, so later changes don't leak into this
+     * save. If an earlier save is still waiting, this one replaces it: only the newest values are written.
      */
-    public boolean save(Settings settings) {
-        try {
-            write(settings);
-            return true;
-        } catch (IOException e) {
-            warn.accept("Can't save the settings to " + file + ": " + e.getMessage());
-            return false;
+    public void save(Settings settings) {
+        if (pending.getAndSet(text(settings)) == null) {
+            writer.execute(this::writePending);
         }
     }
 
-    private void write(Settings s) throws IOException {
-        Files.createDirectories(file.getParent());
-        String text = String.join("\n",
+    /**
+     * Waits until every save handed in so far is written.
+     *
+     * @return whether the last write succeeded (true when nothing was saved)
+     */
+    public boolean flush() {
+        try {
+            writer.submit(() -> { }).get();   // one thread: everything before it has run
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException e) {
+            throw new IllegalStateException(e);
+        }
+        return lastSaved;
+    }
+
+    /** Writes what is still pending and stops the writer. Called when the app closes. */
+    public void close() {
+        flush();
+        writer.shutdown();
+    }
+
+    /**
+     * Writes the newest text, creating the folder. The file is written next to it first and then moved into place,
+     * so a failed save leaves the old settings intact. A failure is passed to {@code warn}; the app keeps running.
+     */
+    private void writePending() {
+        synchronized (this) {   // tests hold this lock to make saves pile up
+            String text = pending.getAndSet(null);   // the newest, taken only when it can be written
+            if (text == null) {
+                return;
+            }
+            try {
+                write(text);
+                lastSaved = true;
+            } catch (IOException e) {
+                lastSaved = false;
+                warn.accept("Can't save the settings to " + file + ": " + e.getMessage());
+            }
+            writes.incrementAndGet();
+        }
+    }
+
+    private static String text(Settings s) {
+        return String.join("\n",
                 "# linview settings. Edit while linview is closed; invalid values fall back to the default.",
                 "zoom.mode=" + name(s.zoomMode()),
                 "zoom.percent=" + format(s.zoomPercent()),
@@ -107,6 +165,10 @@ public final class SettingsStore {
                 "window.width=" + format(s.windowWidth()),
                 "window.height=" + format(s.windowHeight()),
                 "");
+    }
+
+    private void write(String text) throws IOException {
+        Files.createDirectories(file.getParent());
         Path temp = Files.createTempFile(file.getParent(), "settings", ".tmp");
         try {
             Files.writeString(temp, text);

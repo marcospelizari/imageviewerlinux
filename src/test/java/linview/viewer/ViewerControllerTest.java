@@ -12,6 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -49,6 +50,8 @@ class ViewerControllerTest {
     private String title;
     private Settings settings;
     private Path settingsFile;
+    /** The settings writer; tests {@code flush} it before looking at the file (#52). */
+    private SettingsStore store;
     private ViewerController<String> controller;
     private final List<String> timingLines = new ArrayList<>();
     /** The timing log's clock, in nanoseconds. */
@@ -61,7 +64,8 @@ class ViewerControllerTest {
         }
         settingsFile = folder.resolve("config/settings.properties");
         settings = new Settings();
-        controller = new ViewerController<>(settings, new SettingsStore(settingsFile, warnings::add),
+        store = new SettingsStore(settingsFile, warnings::add);
+        controller = new ViewerController<>(settings, store,
                 (file, done) -> {
                     boolean[] cancelled = {false};
                     loads.add(new Pending(file, done, cancelled));
@@ -91,6 +95,12 @@ class ViewerControllerTest {
                     }
                 }, new TimingLog(timingLines::add, () -> now));
         controller.resize(1920, 1080);
+    }
+
+    /** Lets a background write finish before the temporary folder is removed. */
+    @AfterEach
+    void closeStore() {
+        store.close();
     }
 
     private Pending lastLoad() {
@@ -336,6 +346,7 @@ class ViewerControllerTest {
         lastLoad().finish(3840, 2160);
         controller.setZoomMode(Zoom.Mode.ACTUAL);
         assertEquals(new Zoom.View(1, -960, 0), shownView);   // top-centre (R-ZOOM-03)
+        store.flush();
         assertTrue(Files.readString(settingsFile).contains("zoom.mode=actual"));
         assertTrue(warnings.isEmpty(), warnings.toString());
     }
@@ -360,6 +371,7 @@ class ViewerControllerTest {
         controller.open(folder);
         lastLoad().finish(3840, 2160);
         controller.setZoomMode(Zoom.Mode.ACTUAL);
+        store.flush();
         assertEquals(1, warnings.size(), warnings.toString());
         assertEquals(1, shownView.scale(), 1e-9);
         controller.next();
@@ -374,6 +386,7 @@ class ViewerControllerTest {
         controller.zoomOut();
         controller.setZoomMode(Zoom.Mode.FIT);
         assertEquals(0.5, shownView.scale(), 1e-9);
+        store.flush();
         assertFalse(Files.exists(settingsFile));
     }
 
@@ -409,10 +422,12 @@ class ViewerControllerTest {
         assertEquals(Zoom.Mode.LOCK, settings.zoomMode());
         assertEquals(75, settings.zoomPercent());
         assertTrue(title.contains("75% (locked)"), title);
+        store.flush();
         assertTrue(Files.readString(settingsFile).contains("zoom.mode=lock\nzoom.percent=75\n"));
 
         controller.zoomOut();            // locked, so this changes the locked % too
         assertEquals(67, settings.zoomPercent());
+        store.flush();
         assertTrue(Files.readString(settingsFile).contains("zoom.percent=67\n"));
 
         controller.next();
@@ -464,6 +479,7 @@ class ViewerControllerTest {
         lastLoad().finish(3840, 2160);
         controller.zoomIn();
         assertEquals(70, settings.zoomPercent());
+        store.flush();
         assertFalse(Files.exists(settingsFile));
     }
 
@@ -471,6 +487,7 @@ class ViewerControllerTest {
     void nothingToLockWithoutAnImage() {
         controller.toggleZoomLock();
         assertEquals(Zoom.Mode.FIT, settings.zoomMode());
+        store.flush();
         assertFalse(Files.exists(settingsFile));
     }
 
@@ -504,6 +521,7 @@ class ViewerControllerTest {
         controller.toggleZoomLock();      // 50%
         controller.zoomInAt(100, 100);
         assertEquals(67, settings.zoomPercent());
+        store.flush();
         assertTrue(Files.readString(settingsFile).contains("zoom.percent=67\n"));
     }
 
