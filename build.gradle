@@ -36,7 +36,7 @@ dependencies {
 
 application {
     mainClass = 'linview.App'
-    applicationDefaultJvmArgs = ['-Xmx1536m']
+    applicationDefaultJvmArgs = ['-Xmx2g']   // room for very large images: JavaFX decodes a JPEG at full size (#57)
 }
 
 tasks.named('test') {

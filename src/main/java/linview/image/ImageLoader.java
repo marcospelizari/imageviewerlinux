@@ -10,6 +10,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -195,7 +196,7 @@ public final class ImageLoader {
                         ? decodeScale(header.width(), header.height(), orientation, minResolution, preload) : 1;
                 Platform.runLater(() -> {
                     if (!cancelled.get()) {
-                        cancelJavaFX[0] = loadWithJavaFX(file, header, scale, start,
+                        cancelJavaFX[0] = loadWithJavaFX(file, header, scale, preload, start,
                                 result -> done.accept(result, stamp));
                     }
                 });
@@ -234,7 +235,7 @@ public final class ImageLoader {
 
     /**
      * 1 up to {@link #SHRINK_ABOVE_PIXELS}; above, the screen's scale raised to {@code minResolution}, at most 1. A
-     * {@code preload} asks for no more than {@link #SHRINK_ABOVE_PIXELS} decoded pixels (#55): zoom lock at 25 % gets
+     * {@code preload} is decoded to no more than {@link #SHRINK_ABOVE_PIXELS} pixels (#55, #57): zoom lock at 25 % gets
      * its 25 % ahead of time, but a huge neighbour is never decoded in full for actual size before it is selected.
      */
     static double decodeScale(double width, double height, Orientation orientation, double minResolution,
@@ -243,14 +244,61 @@ public final class ImageLoader {
             return 1;
         }
         double screen = screenScale(width, height, orientation, screenWidth, screenHeight);
-        double wanted = preload ? Math.min(minResolution, Math.sqrt(SHRINK_ABOVE_PIXELS / (width * height)))
-                : minResolution;
-        return Math.min(1, Math.max(screen, wanted));
+        double scale = Math.min(1, Math.max(screen, minResolution));
+        return preload ? Math.min(scale, preloadCap(width, height)) : scale;
+    }
+
+    /** The largest scale whose decoded size stays within {@link #SHRINK_ABOVE_PIXELS}, for preloads (#55). */
+    static double preloadCap(double width, double height) {
+        return Math.min(1, Math.sqrt(SHRINK_ABOVE_PIXELS / (width * height)));
     }
 
     /** ImageIO keeps every {@code n}-th pixel: the largest {@code n} whose copy is still at least {@code scale}. */
     static int subsampling(double scale) {
         return Math.max(1, (int) Math.floor(1 / scale + 1e-9));
+    }
+
+    /**
+     * {@link #subsampling}, raised for a preload until the decoded size (every n-th pixel, rounded up) is within
+     * {@link #SHRINK_ABOVE_PIXELS} (#57): one step too few gives 50 MP for a 200 MP TIFF.
+     */
+    static int subsampling(double scale, double width, double height, boolean preload) {
+        int step = subsampling(scale);
+        while (preload && Math.ceil(width / step) * Math.ceil(height / step) > SHRINK_ABOVE_PIXELS) {
+            step++;
+        }
+        return step;
+    }
+
+    /**
+     * The size to ask JavaFX for: rounded up, so the copy has at least {@code scale}; for a preload rounded down when
+     * rounding up would pass {@link #SHRINK_ABOVE_PIXELS} (#57: 7473 × 5354 = 40.01 MP for a 229 MP image).
+     */
+    static double[] requestedSize(double width, double height, double scale, boolean preload) {
+        double w = Math.ceil(width * scale);
+        double h = Math.ceil(height * scale);
+        if (preload && w * h > SHRINK_ABOVE_PIXELS) {
+            w = Math.floor(width * scale);
+            h = Math.floor(height * scale);
+        }
+        return new double[] {w, h};
+    }
+
+    /**
+     * One line for the log: the deepest cause, e.g. "No loader for image data" for a damaged file or
+     * "OutOfMemoryError: Java heap space"; JavaFX wraps the real error in an ExecutionException.
+     */
+    static String reason(Throwable error) {
+        Throwable cause = error;
+        while (cause != null && cause.getCause() != null && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        if (cause == null) {
+            return "unknown error";
+        }
+        String message = cause.getMessage();
+        String name = cause.getClass().getSimpleName();
+        return message == null || message.isBlank() ? name : name + ": " + message;
     }
 
     private static double millisSince(long start) {
@@ -261,13 +309,11 @@ public final class ImageLoader {
      * On the JavaFX thread. With {@code scale} below 1 JavaFX decodes straight to the smaller size. Without a known
      * size (damaged header) the image loads whole, as before, and JavaFX shows what it can.
      */
-    private static Runnable loadWithJavaFX(Path file, ImageHeader header, double scale, long start,
+    private static Runnable loadWithJavaFX(Path file, ImageHeader header, double scale, boolean preload, long start,
                                            Consumer<Loaded<Image>> done) {
         String url = file.toUri().toString();
-        Image image = scale < 1
-                ? new Image(url, Math.ceil(header.width() * scale), Math.ceil(header.height() * scale), true, true,
-                        true)
-                : new Image(url, true);
+        double[] size = scale < 1 ? requestedSize(header.width(), header.height(), scale, preload) : null;
+        Image image = size != null ? new Image(url, size[0], size[1], true, true, true) : new Image(url, true);
         boolean[] reported = {false};
         Runnable check = () -> {
             if (reported[0]) {
@@ -275,6 +321,9 @@ public final class ImageLoader {
             }
             if (image.isError()) {
                 reported[0] = true;
+                if (!(image.getException() instanceof CancellationException)) {   // cancelling is reported as an error
+                    LOG.log(System.Logger.Level.WARNING, "Can't load " + file + ": " + reason(image.getException()));
+                }
                 done.accept(Loaded.failed());
             } else if (image.getProgress() >= 1 && image.getWidth() > 0) {
                 reported[0] = true;
@@ -315,7 +364,8 @@ public final class ImageLoader {
                 width = reader.getWidth(0);
                 height = reader.getHeight(0);
                 ImageReadParam param = reader.getDefaultReadParam();
-                int step = subsampling(decodeScale(width, height, orientation, minResolution, preload));
+                int step = subsampling(decodeScale(width, height, orientation, minResolution, preload), width, height,
+                        preload);
                 if (step > 1) {
                     param.setSourceSubsampling(step, step, 0, 0);
                 }

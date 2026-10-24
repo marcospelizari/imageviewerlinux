@@ -11,7 +11,6 @@ import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
 import linview.image.Loaded;
-import linview.image.Orientation;
 import linview.settings.Settings;
 import linview.settings.SettingsStore;
 

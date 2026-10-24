@@ -95,4 +95,46 @@ class ImageLoaderTest {
         // Normal photos load whole either way.
         assertEquals(1, ImageLoader.decodeScale(6000, 4000, Orientation.UPRIGHT, 1, true, 1920, 1080));
     }
+
+    /** #57: a capped preload really stays within 40 MP, after JavaFX's rounding. */
+    @Test
+    void aCappedJavaFXPreloadIsRoundedDownToStayWithinTheCap() {
+        double cap = ImageLoader.preloadCap(17869, 12802);
+        double[] rounded = ImageLoader.requestedSize(17869, 12802, cap, true);
+        assertTrue(rounded[0] * rounded[1] <= 40e6, rounded[0] + "×" + rounded[1]);
+        // Rounding up would pass the cap (7473 × 5354 = 40.01 MP); the selected image keeps rounding up.
+        assertTrue(Math.ceil(17869 * cap) * Math.ceil(12802 * cap) > 40e6);
+        assertEquals(Math.ceil(17869 * cap), ImageLoader.requestedSize(17869, 12802, cap, false)[0]);
+        // Zoom lock at 25 % is well inside the cap: rounded up, so the copy counts as 25 % when selected.
+        assertEquals(4468, ImageLoader.requestedSize(17869, 12802, 0.25, true)[0]);
+    }
+
+    /** #57: ImageIO's whole-number subsampling is raised for a preload until it fits 40 MP. */
+    @Test
+    void aCappedImageIOPreloadUsesEnoughSubsampling() {
+        double cap = ImageLoader.preloadCap(20000, 10000);   // 200 MP TIFF: ≈ 0.447
+        assertEquals(2, ImageLoader.subsampling(cap, 20000, 10000, false));   // 10000 × 5000 = 50 MP
+        int step = ImageLoader.subsampling(cap, 20000, 10000, true);
+        assertEquals(3, step);
+        assertTrue(Math.ceil(20000.0 / step) * Math.ceil(10000.0 / step) <= 40e6);
+    }
+
+    /** A panorama whose screen copy alone would pass 40 MP is capped for a preload too. */
+    @Test
+    void aPanoramaPreloadIsCappedBelowItsScreenCopy() {
+        double cap = ImageLoader.preloadCap(100000, 1000);
+        assertEquals(cap, ImageLoader.decodeScale(100000, 1000, Orientation.UPRIGHT, 0, true, 1920, 1080), 1e-9);
+        assertEquals(1, ImageLoader.decodeScale(100000, 1000, Orientation.UPRIGHT, 0, false, 1920, 1080));
+    }
+
+    /** #57: a load error is one line in the log, with the real cause JavaFX wraps. */
+    @Test
+    void reasonIsTheDeepestCauseOnOneLine() {
+        assertEquals("OutOfMemoryError: Java heap space", ImageLoader.reason(
+                new java.util.concurrent.ExecutionException(new OutOfMemoryError("Java heap space"))));
+        assertEquals("IOException: No loader for image data",
+                ImageLoader.reason(new java.io.IOException("No loader for image data")));
+        assertEquals("IllegalStateException", ImageLoader.reason(new IllegalStateException()));
+        assertEquals("unknown error", ImageLoader.reason(null));
+    }
 }

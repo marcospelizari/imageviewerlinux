@@ -372,4 +372,39 @@ class LoadSchedulerTest {
         assertEquals(1, last().minResolution);
         assertEquals(List.of("a.jpg"), shown);   // B waits for its full image
     }
+
+    /**
+     * #57: a preload whose result is too large to keep (rounding past the 40 MP cap) is not started again while its
+     * image stays wanted; the next wanted image goes on.
+     */
+    @Test
+    void aPreloadTooLargeToKeepIsNotRetried() {
+        select(A);
+        scheduler.preload(List.of(B, C), 1);
+        last().finish();
+        Decode preloadB = last();
+
+        preloadB.done.accept(new Loaded<>("b", 20000, 10000, Orientation.UPRIGHT, 0.5, 0), "v1");   // 50 MP
+
+        assertEquals(C, last().file);   // not B again
+        last().finish();
+        scheduler.preload(List.of(B, C), 1);   // the next navigation, B still wanted
+        assertEquals(1, decodes.stream().filter(d -> d.file.equals(B)).count());
+    }
+
+    /** Once the image has left the window, it may be tried again when it comes back. */
+    @Test
+    void aRejectedPreloadIsTriedAgainAfterLeavingTheWindow() {
+        select(A);
+        scheduler.preload(List.of(B), 1);
+        last().finish();
+        last().done.accept(new Loaded<>("b", 20000, 10000, Orientation.UPRIGHT, 0.5, 0), "v1");
+
+        scheduler.preload(List.of(C), 1);
+        last().finish();
+        scheduler.preload(List.of(B), 1);
+
+        assertEquals(B, last().file);
+        assertEquals(2, decodes.stream().filter(d -> d.file.equals(B)).count());
+    }
 }
