@@ -3,6 +3,8 @@
 All notable changes are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Changed
+- The window code moved from `App` to `ui.ViewerWindow`: Stage and Scene, the Open dialog, full-screen and what the controller shows. Every action goes through its one entry point `execute(Keys.Action)`, which the taskbar, panels and menu will call too. `App` only builds, connects, starts and stops. No change in behaviour (#53)
 
 ## [0.2.0] - 2026-10-24 - Phase 3
 ### Added

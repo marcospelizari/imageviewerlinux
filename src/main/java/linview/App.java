@@ -1,10 +1,8 @@
 package linview;
 
-import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -13,34 +11,24 @@ import java.util.function.Consumer;
 import javafx.application.Application;
 import javafx.application.Platform;
 import javafx.geometry.Dimension2D;
-import javafx.scene.Scene;
 import javafx.scene.image.Image;
-import javafx.scene.input.KeyEvent;
-import javafx.scene.input.MouseButton;
-import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import linview.image.ImageLoader;
 import linview.image.Loaded;
 import linview.settings.Settings;
 import linview.settings.SettingsStore;
-import linview.ui.Keys;
-import linview.ui.ViewerPane;
+import linview.ui.ViewerWindow;
 import linview.ui.WindowPlacement;
-import linview.viewer.ImageList;
 import linview.viewer.TimingLog;
 import linview.viewer.ViewerController;
-import linview.viewer.Zoom;
 
 /**
- * Entry point and composition root (REPORT.md §6): builds the components, connects them and owns the window.
+ * Entry point and composition root (REPORT.md §6): builds the components, connects, starts and stops them.
  * Opens the file or folder given on the command line (R-NAV-01); {@code --timing} turns on the timing log (#23).
- * Keys are in {@link Keys}; what they do is in {@link ViewerController}.
+ * The window and its actions are in {@link ViewerWindow} (#53); what they do to the viewing in {@link ViewerController}.
  */
 public class App extends Application {
-
-    /** Icon sizes in src/main/resources/linview/icons; the desktop picks the best one for each place. */
-    static final int[] ICON_SIZES = {16, 32, 48, 64, 128, 256, 512};
 
     private static ThreadPoolExecutor folderListing() {
         ThreadPoolExecutor pool = new ThreadPoolExecutor(2, 2, 30, TimeUnit.SECONDS, new ArrayBlockingQueue<>(1),
@@ -50,16 +38,11 @@ public class App extends Application {
         return pool;
     }
 
-    static String iconPath(int size) {
-        return "/linview/icons/linview-" + size + ".png";
-    }
-
     /** Turns on the timing log (#23): one line per image on standard error, a summary on closing. */
     static final String TIMING_FLAG = "--timing";
 
     private static final System.Logger LOG = System.getLogger("linview");
 
-    private Stage stage;
     private ViewerController<Image> controller;
     private ImageLoader loader;
     /**
@@ -82,7 +65,6 @@ public class App extends Application {
 
     @Override
     public void start(Stage stage) {
-        this.stage = stage;
         Dimension2D screen = WindowPlacement.largestScreenPixels();
         loader = new ImageLoader(screen.getWidth(), screen.getHeight());
         List<String> args = new ArrayList<>(getParameters().getRaw());
@@ -91,7 +73,6 @@ public class App extends Application {
             // Also when the app is stopped from the terminal (Ctrl+C), which skips stop().
             Runtime.getRuntime().addShutdownHook(new Thread(timing::summary, "linview-timing-summary"));
         }
-        ViewerPane viewer = new ViewerPane();
         ViewerController.ImageSource<Image> source = new ViewerController.ImageSource<>() {
             @Override
             public Runnable load(Path file, double minResolution, Consumer<Loaded<Image>> done) {
@@ -103,101 +84,14 @@ public class App extends Application {
                 loader.preload(files, minResolution);
             }
         };
-        controller = new ViewerController<>(settings, store, source, new ViewerController.Display<>() {
-            @Override
-            public void showImage(Loaded<Image> image, Zoom.View view) {
-                viewer.show(image, view);
-            }
-
-            @Override
-            public void showMessage(String text) {
-                viewer.showMessage(text);
-            }
-
-            @Override
-            public void showTitle(String title) {
-                stage.setTitle(title);
-            }
-        }, timing, folders, Platform::runLater);
-        viewer.connect(controller, stage);
-
-        Scene scene = new Scene(viewer, 1024, 700);
-        scene.setOnKeyPressed(this::keyPressed);
-        scene.setOnMouseClicked(e -> {
-            // A drag that ends where it started is not a click (R-ZOOM-05).
-            if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2 && e.isStillSincePress()) {
-                toggleFullScreen();
-            }
-        });
-
-        stage.setFullScreenExitHint("");
-        stage.setTitle(ViewerController.TITLE);
-        for (int size : ICON_SIZES) {
-            stage.getIcons().add(new Image(App.class.getResource(iconPath(size)).toExternalForm()));
-        }
-        stage.setScene(scene);
-        WindowPlacement.placeOnMouseScreen(stage, scene.getWidth(), scene.getHeight());
-        stage.show();
+        ViewerWindow window = new ViewerWindow(stage);
+        controller = new ViewerController<>(settings, store, source, window, timing, folders, Platform::runLater);
+        window.show(controller);
 
         if (args.isEmpty()) {
             controller.showOpenHintIfEmpty();
         } else {
             controller.open(Path.of(args.get(0)));
-        }
-    }
-
-    private void keyPressed(KeyEvent e) {
-        Keys.Action action = Keys.actionFor(e);
-        if (action == null) {
-            return;
-        }
-        switch (action) {
-            case NEXT -> controller.next();
-            case PREVIOUS -> controller.previous();
-            case FIRST -> controller.first();
-            case LAST -> controller.last();
-            case OPEN -> chooseAndOpen();
-            case FULL_SCREEN -> toggleFullScreen();
-            case ZOOM_IN -> controller.zoomIn();
-            case ZOOM_OUT -> controller.zoomOut();
-            case FIT -> controller.setZoomMode(Zoom.Mode.FIT);
-            case FIT_WIDTH -> controller.setZoomMode(Zoom.Mode.WIDTH);
-            case ACTUAL_SIZE -> controller.setZoomMode(Zoom.Mode.ACTUAL);
-            case FIT_OR_ACTUAL -> controller.toggleFitOrActual();
-            case ZOOM_LOCK -> controller.toggleZoomLock();
-            case ROTATE_RIGHT -> controller.rotateRight();
-            case ROTATE_LEFT -> controller.rotateLeft();
-            case ESCAPE -> {
-                // In full-screen JavaFX itself leaves full-screen on Esc.
-                if (!stage.isFullScreen()) {
-                    stage.close();
-                }
-            }
-        }
-    }
-
-    /** Enter, F11 or a double-click (R-VIEW-02). */
-    private void toggleFullScreen() {
-        stage.setFullScreen(!stage.isFullScreen());
-    }
-
-    /** Ctrl+O / O: pick an image; its folder becomes the list. */
-    private void chooseAndOpen() {
-        FileChooser chooser = new FileChooser();
-        chooser.setTitle("Open image");
-        List<String> patterns = new ArrayList<>();
-        for (String ext : ImageList.EXTENSIONS) {
-            patterns.add("*." + ext);
-            patterns.add("*." + ext.toUpperCase(Locale.ROOT));
-        }
-        chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Images", patterns));
-        chooser.setInitialDirectory(controller.startFolder().toFile());
-
-        File chosen = chooser.showOpenDialog(stage);
-        if (chosen != null) {
-            controller.open(chosen.toPath());
-        } else {
-            controller.showOpenHintIfEmpty();
         }
     }
 
