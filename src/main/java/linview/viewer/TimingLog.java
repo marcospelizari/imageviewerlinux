@@ -13,7 +13,7 @@ import java.util.function.LongSupplier;
  * Timing log (#23), on with {@code --timing}: one line per image, and a summary when the app closes. "Shown" is
  * the agreed measure (REPORT.md §5.2): from the key press reaching the controller until the image is handed to
  * the window; the frame follows about 16 ms later. "Load" is the loader's own time, from starting the load until
- * the image was ready. {@link #OFF} does nothing, so callers never check whether the log is on.
+ * the image was ready; "cache" says whether it came from the cache (#20). {@link #OFF} does nothing, so callers never check whether the log is on.
  */
 public final class TimingLog {
 
@@ -38,13 +38,14 @@ public final class TimingLog {
         return clock.getAsLong();
     }
 
-    synchronized void shown(String name, long start, double loadMillis) {
+    synchronized void shown(String name, long start, double loadMillis, boolean cached) {
         if (out == null) {
             return;
         }
         double millis = millisSince(start);
         shown.add(millis);
-        out.accept(String.format(Locale.ROOT, "timing  %s  shown %.1f ms  load %.1f ms", name, millis, loadMillis));
+        out.accept(String.format(Locale.ROOT, "timing  %s  shown %.1f ms  load %.1f ms  cache %s", name, millis,
+                loadMillis, cached ? "yes" : "no"));
     }
 
     /** #22: the full image of {@code name} replaced its screen-size copy. */

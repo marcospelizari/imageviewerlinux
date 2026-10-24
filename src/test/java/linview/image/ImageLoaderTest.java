@@ -1,6 +1,7 @@
 package linview.image;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
@@ -136,5 +137,38 @@ class ImageLoaderTest {
                 ImageLoader.reason(new java.io.IOException("No loader for image data")));
         assertEquals("IllegalStateException", ImageLoader.reason(new IllegalStateException()));
         assertEquals("unknown error", ImageLoader.reason(null));
+    }
+
+    /**
+     * #20: JavaFX decodes a JPEG at full size, 3 bytes per pixel, whatever size is asked for (GC log, 2026-10-24); the
+     * other JavaFX formats 4. ImageIO decodes every n-th pixel and holds three copies of it.
+     */
+    @Test
+    void decodeMemoryIsEstimatedFromTheStoredSize() {
+        assertEquals(17869L * 12802 * 3, ImageLoader.decodeBytes("jpg", 17869, 12802, 0.1, false));
+        assertEquals(4000L * 3000 * 4, ImageLoader.decodeBytes("png", 4000, 3000, 1, false));
+        assertEquals(1000L * 500 * 12, ImageLoader.decodeBytes("tif", 2000, 1000, 0.5, false));
+    }
+
+    /** #20: the limits agreed with Marcos, for the test images from §7. */
+    @Test
+    void hugeJpegsAreNotPreloadedButFitTheDecodeLimit() {
+        long large = ImageLoader.decodeBytes("jpg", 17869, 12802, 1, false);    // 25mb.jpg, 229 MP
+        long larger = ImageLoader.decodeBytes("jpg", 29437, 10751, 1, false);   // 50mb.jpg, 317 MP
+        assertTrue(large > ImageLoader.PRELOAD_DECODE_LIMIT);
+        assertTrue(larger <= ImageLoader.DECODE_LIMIT);
+        assertTrue(ImageLoader.decodeBytes("jpg", 4000, 3000, 1, true) < ImageLoader.PRELOAD_DECODE_LIMIT);   // 12 MP
+    }
+
+    /** #20: running out of memory is "too large", whatever wraps it; any other error stays "damaged". */
+    @Test
+    void outOfMemoryIsTooLargeNotDamaged() {
+        ImageHeader header = new ImageHeader(Orientation.UPRIGHT, 29437, 10751);
+        assertTrue(ImageLoader.failure(new java.util.concurrent.ExecutionException(
+                new OutOfMemoryError("Java heap space")), header).isTooLarge());
+        assertFalse(ImageLoader.failure(new java.io.IOException("No loader"), header).isTooLarge());
+        assertTrue(ImageLoader.failure(new java.io.IOException("No loader"), header).isFailed());
+        assertFalse(ImageLoader.failure(new OutOfMemoryError(), ImageHeader.UNKNOWN).isTooLarge());
+        assertTrue(ImageLoader.failure(null, header).isFailed());
     }
 }
