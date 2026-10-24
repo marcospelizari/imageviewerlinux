@@ -27,7 +27,9 @@ class SettingsStoreTest {
     }
 
     private boolean save(Settings settings, Path file) {
-        return new SettingsStore(file, warnings::add).save(settings);
+        SettingsStore store = new SettingsStore(file, warnings::add);
+        store.save(settings);
+        return store.flush();
     }
 
     private static void assertDefaults(Settings s) {
@@ -177,5 +179,65 @@ class SettingsStoreTest {
         Path blocker = Files.writeString(folder.resolve("linview"), "");
         assertFalse(save(new Settings(), blocker.resolve("settings.properties")));
         assertEquals(1, warnings.size(), warnings.toString());
+    }
+
+    /** #52: quick saves in a row end in one write of the newest values. */
+    @Test
+    void quickSavesInARowAreWrittenOnceWithTheNewestValues(@TempDir Path folder) throws IOException {
+        Path file = folder.resolve("settings.properties");
+        SettingsStore store = new SettingsStore(file, warnings::add);
+        Settings s = new Settings();
+        s.setZoomMode(Zoom.Mode.LOCK);
+        synchronized (store) {   // the writer waits, as during a slow write
+            for (int percent = 51; percent <= 100; percent++) {
+                s.setZoomPercent(percent);
+                store.save(s);
+            }
+        }
+
+        assertTrue(store.flush());
+
+        assertEquals(1, store.writes.get());
+        assertEquals(100, load(file).zoomPercent());
+        assertTrue(warnings.isEmpty(), warnings.toString());
+    }
+
+    /** The values are copied when saving: a change after {@code save} is not written by it. */
+    @Test
+    void saveCopiesTheValues(@TempDir Path folder) {
+        Path file = folder.resolve("settings.properties");
+        SettingsStore store = new SettingsStore(file, warnings::add);
+        Settings s = new Settings();
+        synchronized (store) {
+            s.setWheel(Settings.Wheel.NAVIGATE);
+            store.save(s);
+            s.setWheel(Settings.Wheel.SCROLL);
+        }
+
+        store.flush();
+
+        assertEquals(Settings.Wheel.NAVIGATE, load(file).wheel());
+    }
+
+    /** Closing writes a change still pending, so nothing is lost on a normal close. */
+    @Test
+    void closeWritesWhatIsPending(@TempDir Path folder) {
+        Path file = folder.resolve("settings.properties");
+        SettingsStore store = new SettingsStore(file, warnings::add);
+        Settings s = new Settings();
+        s.setZoomPercent(42);
+        store.save(s);
+
+        store.close();
+
+        assertEquals(42, load(file).zoomPercent());
+    }
+
+    @Test
+    void flushWithNothingSavedWritesNothing(@TempDir Path folder) {
+        SettingsStore store = new SettingsStore(folder.resolve("settings.properties"), warnings::add);
+        assertTrue(store.flush());
+        assertEquals(0, store.writes.get());
+        assertFalse(Files.exists(folder.resolve("settings.properties")));
     }
 }

@@ -9,6 +9,7 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - `./gradlew appImage` builds a packaged app in `build/jpackage/linview` (jpackage app image, about 100 MB) with its own Java runtime and JavaFX: it starts without Gradle or an installed Java, also with spaces and accents in the path. No installer or `.desktop` file yet (#54)
 
 ### Changed
+- Settings are saved in the background, never on the UI thread: quick changes in a row (Ctrl + wheel with zoom lock on) end in one write of the newest values, and closing the app writes a change still pending. The file is still replaced only after the new one is fully written. Settings are read before the window opens (#52)
 - Version 0.1.0 in `build.gradle`, matching the `v0.1.0` tag (#54)
 
 ## [0.1.0] - 2026-10-24 - Phase 2

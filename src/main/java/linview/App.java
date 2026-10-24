@@ -50,13 +50,20 @@ public class App extends Application {
     private ViewerController<Image> controller;
     private final ImageLoader loader = new ImageLoader();
     private TimingLog timing = TimingLog.OFF;
+    private SettingsStore store;
+    private Settings settings;
+
+    /** Reads the settings on JavaFX's launcher thread, before the window exists: no file I/O on the UI thread (#52). */
+    @Override
+    public void init() {
+        store = new SettingsStore(SettingsStore.defaultFile(),
+                warning -> LOG.log(System.Logger.Level.WARNING, warning));
+        settings = store.load();
+    }
 
     @Override
     public void start(Stage stage) {
         this.stage = stage;
-        SettingsStore store = new SettingsStore(SettingsStore.defaultFile(),
-                warning -> LOG.log(System.Logger.Level.WARNING, warning));
-        Settings settings = store.load();
         List<String> args = new ArrayList<>(getParameters().getRaw());
         if (args.remove(TIMING_FLAG)) {
             timing = TimingLog.toStandardError();
@@ -168,6 +175,7 @@ public class App extends Application {
     @Override
     public void stop() {
         loader.close();
+        store.close();   // writes a change still pending
     }
 
     public static void main(String[] args) {
