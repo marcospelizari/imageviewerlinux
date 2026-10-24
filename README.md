@@ -52,8 +52,26 @@ and JavaFX) and start it from `build/jpackage/linview/bin/`:
 build/jpackage/linview/bin/linview "$HOME/Pictures/photo.jpg"
 ```
 
-An installer and "Open with linview" in file managers come later. (`./gradlew installDist` does not give a working
-start script: use `appImage`.)
+(`./gradlew installDist` does not give a working start script: use `appImage`.)
+
+### Install for your user
+No root and nothing outside your home folder, so it also suits image-based systems such as Bazzite or Silverblue:
+
+```sh
+./gradlew installLocal     # or again to update
+./gradlew uninstallLocal   # removes it
+```
+
+This puts the app in `~/.local/share/linview`, adds linview to the app menu with its icon, and offers it in the file
+manager's "Open with" for JPEG, PNG, GIF, BMP, WebP, TIFF, PSD and TGA. As usual on Linux, it doesn't take over
+double-click: choose the default yourself in the file manager (right-click → Open With → Other Application… →
+"Remember application association") or in System Settings → Default Applications, or for all its formats at once:
+
+```sh
+for type in image/jpeg image/png image/gif image/bmp image/webp image/tiff image/vnd.adobe.photoshop image/x-tga; do
+    xdg-mime default linview.desktop "$type"
+done
+```
 
 To measure speed, add `--timing`: each image writes a line like `timing  photo.jpg  shown 120.0 ms  load 100.0 ms`
 to the terminal (`shown` = from the key press until the image is on its way to the screen, `load` = decoding),
