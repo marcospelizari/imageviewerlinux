@@ -1,10 +1,13 @@
 package linview.viewer;
 
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
 import linview.image.Loaded;
@@ -28,6 +31,10 @@ public final class ViewerController<I> {
     /** One wheel notch scrolls this part of the window height (decided 2026-10-22). */
     static final double SCROLL_STEP = 0.1;
 
+    /** Preloading (#21, REPORT.md §3.5): this many images ahead in the direction of movement, and behind. */
+    static final int PRELOAD_AHEAD = 3;
+    static final int PRELOAD_BEHIND = 1;
+
     /** Rounding slack before a screen-size copy counts as too small for the zoom (#22). */
     static final double FULL_RESOLUTION_SLACK = 1.001;
 
@@ -43,9 +50,14 @@ public final class ViewerController<I> {
      *       or never call it. The controller ignores any result for an image no longer wanted.</li>
      * </ul>
      */
-    @FunctionalInterface
     public interface ImageSource<I> {
         Runnable load(Path file, double minResolution, Consumer<Loaded<I>> done);
+
+        /**
+         * The images likely to come next, most wanted first (#21), each with at least {@code minResolution}: load
+         * them in the background without delaying {@link #load}, and drop others. Called after each {@code load}.
+         */
+        void preload(List<Path> files, double minResolution);
     }
 
     /** What the window shows. */
@@ -77,9 +89,15 @@ public final class ViewerController<I> {
     private final ImageSource<I> source;
     private final Display<I> display;
     private final TimingLog timing;
+    private final Executor background;
+    private final Executor onJavaFXThread;
 
     /** The open folder; {@code null} when nothing is open. */
     private ImageList images;
+    /** Identity of the latest {@link #open}: a folder listed for an earlier one is ignored (#21). */
+    private long opening;
+    /** The direction of the last move, which preloading follows (#21). */
+    private boolean forward = true;
     /** Identity of the latest load: a result for an earlier one is ignored, even if it can't be cancelled. */
     private long request;
     private Runnable cancel = () -> { };
@@ -106,29 +124,56 @@ public final class ViewerController<I> {
     private long requestStart;
     private boolean timingPending;
 
+    /**
+     * {@code background} lists folders off the JavaFX thread (#21); {@code onJavaFXThread} brings the result back
+     * ({@code Platform::runLater} in the app, {@code Runnable::run} in tests).
+     */
     public ViewerController(Settings settings, SettingsStore store, ImageSource<I> source, Display<I> display,
-                            TimingLog timing) {
+                            TimingLog timing, Executor background, Executor onJavaFXThread) {
         this.settings = settings;
         this.store = store;
         this.source = source;
         this.display = display;
         this.timing = timing;
+        this.background = background;
+        this.onJavaFXThread = onJavaFXThread;
     }
 
-    /** Opens a folder, or an image and its folder (R-NAV-01); problems are shown as a message. */
+    /**
+     * Opens a folder, or an image and its folder (R-NAV-01); problems are shown as a message. The folder is listed and
+     * sorted in the background (#21); until then the image on screen stays and can still be navigated. A listing for
+     * an earlier open is ignored.
+     */
     public void open(Path path) {
-        try {
-            images = ImageList.open(path);
-        } catch (NoSuchFileException e) {
-            nothingOpen("Not found: " + path);
-            return;
-        } catch (AccessDeniedException e) {
-            nothingOpen("No permission to read: " + path);
-            return;
-        } catch (IOException e) {
-            nothingOpen(e.getMessage());
+        long id = ++opening;
+        background.execute(() -> {
+            ImageList list = null;
+            String problem = null;
+            try {
+                list = ImageList.open(path);
+            } catch (NoSuchFileException e) {
+                problem = "Not found: " + path;
+            } catch (AccessDeniedException e) {
+                problem = "No permission to read: " + path;
+            } catch (IOException | UncheckedIOException e) {   // Files.list throws the unchecked one while listing
+                problem = e.getMessage();
+            }
+            ImageList listed = list;
+            String failure = problem;
+            onJavaFXThread.execute(() -> opened(id, listed, failure));
+        });
+    }
+
+    private void opened(long id, ImageList list, String problem) {
+        if (id != opening) {
             return;
         }
+        if (problem != null) {
+            nothingOpen(problem);
+            return;
+        }
+        images = list;
+        forward = true;
         if (images.isEmpty()) {
             nothingOpen("No images in " + images.folder() + "\n\n" + OPEN_HINT);
             return;
@@ -154,18 +199,23 @@ public final class ViewerController<I> {
     }
 
     public void next() {
+        forward = true;
         moveTo(images == null ? null : images.next());
     }
 
     public void previous() {
+        forward = false;
         moveTo(images == null ? null : images.previous());
     }
 
+    /** From the first image the way on is forward, from the last one backward. */
     public void first() {
+        forward = true;
         moveTo(images == null ? null : images.first());
     }
 
     public void last() {
+        forward = false;
         moveTo(images == null ? null : images.last());
     }
 
@@ -351,6 +401,7 @@ public final class ViewerController<I> {
         timingPending = false;
         cancel.run();
         cancelFull.run();
+        source.preload(List.of(), 0);
         shown = null;
         view = null;
         display.showTitle(TITLE);
@@ -372,6 +423,7 @@ public final class ViewerController<I> {
         Runnable previous = cancel;
         cancel = source.load(file, resolutionForMode(), result -> loaded(id, file, result));
         previous.run();   // stop decoding an image no longer wanted (fast key presses)
+        source.preload(images.upcoming(forward, PRELOAD_AHEAD, PRELOAD_BEHIND), resolutionForMode());
     }
 
     private void loaded(long id, Path file, Loaded<I> result) {

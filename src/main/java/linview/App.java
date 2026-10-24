@@ -5,8 +5,12 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.function.Consumer;
 
 import javafx.application.Application;
+import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
 import javafx.geometry.Dimension2D;
 import javafx.scene.Scene;
@@ -50,6 +54,9 @@ public class App extends Application {
     private Stage stage;
     private ViewerController<Image> controller;
     private ImageLoader loader;
+    /** Lists folders off the JavaFX thread (#21). */
+    private final ExecutorService folders =
+            Executors.newSingleThreadExecutor(Thread.ofPlatform().name("linview-folders").daemon().factory());
     private TimingLog timing = TimingLog.OFF;
     private SettingsStore store;
     private Settings settings;
@@ -74,7 +81,18 @@ public class App extends Application {
             Runtime.getRuntime().addShutdownHook(new Thread(timing::summary, "linview-timing-summary"));
         }
         ViewerPane viewer = new ViewerPane();
-        controller = new ViewerController<>(settings, store, loader::load, new ViewerController.Display<>() {
+        ViewerController.ImageSource<Image> source = new ViewerController.ImageSource<>() {
+            @Override
+            public Runnable load(Path file, double minResolution, Consumer<Loaded<Image>> done) {
+                return loader.load(file, minResolution, done);
+            }
+
+            @Override
+            public void preload(List<Path> files, double minResolution) {
+                loader.preload(files, minResolution);
+            }
+        };
+        controller = new ViewerController<>(settings, store, source, new ViewerController.Display<>() {
             @Override
             public void showImage(Loaded<Image> image, Zoom.View view) {
                 viewer.show(image, view);
@@ -89,7 +107,7 @@ public class App extends Application {
             public void showTitle(String title) {
                 stage.setTitle(title);
             }
-        }, timing);
+        }, timing, folders, Platform::runLater);
         viewer.sendGesturesTo(controller);
         InvalidationListener resized = obs -> controller.resize(viewer.getWidth(), viewer.getHeight());
         viewer.widthProperty().addListener(resized);
@@ -180,6 +198,7 @@ public class App extends Application {
         if (loader != null) {
             loader.close();
         }
+        folders.shutdownNow();
         store.close();   // writes a change still pending
     }
 

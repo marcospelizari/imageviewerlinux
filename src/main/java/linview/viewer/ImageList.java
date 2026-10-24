@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -100,6 +101,28 @@ public final class ImageList {
 
     ImageList last() {
         return at(files.size() - 1);
+    }
+
+    /**
+     * The images to preload (#21), most wanted first: {@code ahead} images in the direction of movement
+     * ({@code forward}), then {@code behind} the other way. Stops at the ends of the folder.
+     */
+    List<Path> upcoming(boolean forward, int ahead, int behind) {
+        int step = forward ? 1 : -1;
+        List<Path> wanted = new ArrayList<>();
+        for (int i = 1; i <= ahead; i++) {
+            addIfInside(wanted, index + step * i);
+        }
+        for (int i = 1; i <= behind; i++) {
+            addIfInside(wanted, index - step * i);
+        }
+        return wanted;
+    }
+
+    private void addIfInside(List<Path> wanted, int i) {
+        if (i >= 0 && i < files.size()) {
+            wanted.add(files.get(i));
+        }
     }
 
     private ImageList at(int newIndex) {

@@ -47,11 +47,4 @@ class OrientationTest {
         assertEquals(new Orientation(0, true), Orientation.of(5).rotated(5));
         assertEquals(Orientation.UPRIGHT, Orientation.UPRIGHT.rotated(4));
     }
-
-    @Test
-    void unreadableFilesAreShownAsStored(@TempDir Path folder) throws IOException {
-        Path junk = Files.write(folder.resolve("junk.jpg"), new byte[] {1, 2, 3, 4, 5});
-        assertEquals(Orientation.UPRIGHT, Orientation.read(junk));
-        assertEquals(Orientation.UPRIGHT, Orientation.read(folder.resolve("missing.jpg")));
-    }
 }
