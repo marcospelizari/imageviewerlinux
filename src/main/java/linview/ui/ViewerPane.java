@@ -4,6 +4,7 @@ import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
+import javafx.animation.Animation;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
@@ -52,7 +53,12 @@ import linview.viewer.Zoom;
  * <p>Magnifier (R-FS-07, #32): while the whole image fits the window, holding the left button shows a round loupe
  * at {@link #LOUPE_ZOOM} times actual size under the mouse; when the image is larger, the left button pans instead
  * (Marcos, 2026-10-24). It shows the image on screen, unsmoothed so its real pixels show, and asks for the full
- * image if a screen-size copy is shown (#22).
+ * image if a screen-size copy is shown (#22). It appears after the button is held {@link #LOUPE_DELAY} or as soon as
+ * the mouse moves, so a click doesn't flash it.
+ *
+ * <p>Clicks (R-NAV-03, #62, as in FastStone): a left click on the right half goes to the next image, on the left half
+ * to the previous one; it waits {@link #DOUBLE_CLICK} so a double-click (full-screen) wins. A drag or a hold is
+ * not a click.
  */
 public final class ViewerPane extends StackPane {
 
@@ -73,6 +79,15 @@ public final class ViewerPane extends StackPane {
     private Loaded<Image> shownLoaded;
     private Zoom.View shownView;
     private boolean magnifying;
+    static final Duration LOUPE_DELAY = Duration.millis(200);
+    private final PauseTransition loupeDelay = new PauseTransition(LOUPE_DELAY);
+    static final Duration DOUBLE_CLICK = Duration.millis(300);
+    private final PauseTransition clickDelay = new PauseTransition(DOUBLE_CLICK);
+    private Runnable previous = () -> { };
+    private Runnable next = () -> { };
+    private Runnable doubleClick = () -> { };
+    /** The loupe was shown during this press, so its release isn't a click. */
+    private boolean loupeShown;
     private double loupeX;
     private double loupeY;
     private final Label message = new Label();
@@ -131,20 +146,41 @@ public final class ViewerPane extends StackPane {
 
         setOnScroll(this::scrolled);
         setOnMousePressed(e -> {
+            loupeShown = false;
             if (e.getButton() == MouseButton.PRIMARY && pannable) {
                 dragging = true;
                 dragX = e.getX();
                 dragY = e.getY();
                 updateCursor();
             } else if (e.getButton() == MouseButton.PRIMARY && shownLoaded != null) {
-                magnifying = true;
-                controller.loadFullResolution();
-                showLoupe(e.getX(), e.getY());
+                loupeX = e.getX();
+                loupeY = e.getY();
+                loupeDelay.setOnFinished(f -> startLoupe());   // held: the loupe, not a click
+                loupeDelay.playFromStart();
+            }
+        });
+        setOnMouseClicked(e -> {
+            if (e.getButton() != MouseButton.PRIMARY || !e.isStillSincePress()) {
+                return;   // a drag (pan, loupe) is not a click
+            }
+            if (e.getClickCount() == 2) {
+                clickDelay.stop();   // the first click's navigation never happens
+                doubleClick.run();
+            } else if (e.getClickCount() == 1 && !loupeShown) {
+                Runnable go = e.getX() < getWidth() / 2 ? previous : next;
+                clickDelay.setOnFinished(f -> go.run());
+                clickDelay.playFromStart();
             }
         });
         setOnMouseMoved(e -> pointerMoved());
         setOnMouseDragged(e -> {
             pointerMoved();
+            if (loupeDelay.getStatus() == Animation.Status.RUNNING) {
+                loupeDelay.stop();   // moving while held: the loupe at once
+                loupeX = e.getX();
+                loupeY = e.getY();
+                startLoupe();
+            }
             if (magnifying) {
                 showLoupe(e.getX(), e.getY());
             }
@@ -159,8 +195,11 @@ public final class ViewerPane extends StackPane {
                 dragging = false;
                 updateCursor();
             }
-            if (e.getButton() == MouseButton.PRIMARY && magnifying) {
-                hideLoupe();
+            if (e.getButton() == MouseButton.PRIMARY) {
+                loupeDelay.stop();
+                if (magnifying) {
+                    hideLoupe();
+                }
             }
         });
         idle.setOnFinished(e -> {
@@ -266,6 +305,23 @@ public final class ViewerPane extends StackPane {
         if (magnifying) {
             showLoupe(loupeX, loupeY);   // e.g. the full image arrived
         }
+    }
+
+    /** What a click does: previous image, next image, and a double-click (#62). */
+    void onClicks(Runnable previous, Runnable next, Runnable doubleClick) {
+        this.previous = previous;
+        this.next = next;
+        this.doubleClick = doubleClick;
+    }
+
+    private void startLoupe() {
+        if (shownLoaded == null) {
+            return;
+        }
+        magnifying = true;
+        loupeShown = true;   // its release is not a click
+        controller.loadFullResolution();
+        showLoupe(loupeX, loupeY);
     }
 
     private void hideLoupe() {

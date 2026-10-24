@@ -97,6 +97,7 @@ so new windows open on the monitor with the mouse pointer.
 | Mouse wheel | Scroll the image, or next/previous image (`wheel` setting) |
 | Ctrl + mouse wheel | Zoom in / out at the mouse pointer |
 | Drag (left button) | Move an image larger than the window |
+| Click (left button) | Right half: next image; left half: previous image |
 | Hold left button | Magnifier (twice actual size) when the image fits the window |
 | B | Fit to window |
 | W | Fit width |
