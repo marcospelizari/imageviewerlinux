@@ -10,6 +10,7 @@ import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.StackPane;
 import javafx.scene.shape.Rectangle;
 
+import linview.image.Loaded;
 import linview.image.Orientation;
 import linview.viewer.ViewerController;
 import linview.viewer.Zoom;
@@ -92,21 +93,25 @@ public final class ViewerPane extends StackPane {
         return multiplier > 0 ? multiplier : 40;   // 40 = JavaFX's usual wheel notch
     }
 
-    /** {@code image} turned upright with {@code orientation} (R-FMT-03), at the scale and place in {@code v}. */
-    public void show(Image image, Orientation orientation, Zoom.View v) {
+    /**
+     * {@code loaded} turned upright with its orientation (R-FMT-03), at the scale and place in {@code v}. The scale is
+     * for the real size: a smaller screen-size copy (#19) is stretched to it.
+     */
+    public void show(Loaded<Image> loaded, Zoom.View v) {
+        Image image = loaded.image();
+        Orientation orientation = loaded.orientation();
         message.setText("");
         // ImageView scales before it rotates, both around its centre: mirror first, then rotate, as EXIF defines.
         view.setScaleX(orientation.mirror() ? -1 : 1);
         view.setRotate(orientation.degrees());
         view.setImage(image);
         // The fit sizes apply before turning, so they use the stored width and height.
-        view.setFitWidth(image.getWidth() * v.scale());
-        view.setFitHeight(image.getHeight() * v.scale());
+        view.setFitWidth(loaded.width() * v.scale());
+        view.setFitHeight(loaded.height() * v.scale());
         turned.relocate(v.x(), v.y());
 
-        boolean sideways = orientation.swapsSides();
-        double width = (sideways ? image.getHeight() : image.getWidth()) * v.scale();
-        double height = (sideways ? image.getWidth() : image.getHeight()) * v.scale();
+        double width = loaded.uprightWidth() * v.scale();
+        double height = loaded.uprightHeight() * v.scale();
         // Half a pixel of slack: a fit image is not pannable because of rounding.
         setPannable(width > getWidth() + 0.5 || height > getHeight() + 0.5);
     }

@@ -2,6 +2,7 @@ package linview.ui;
 
 import java.util.List;
 
+import javafx.geometry.Dimension2D;
 import javafx.geometry.Point2D;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.robot.Robot;
@@ -24,6 +25,20 @@ public final class WindowPlacement {
         Point2D corner = centredOn(screen, width, height);
         stage.setX(corner.getX());
         stage.setY(corner.getY());
+    }
+
+    /**
+     * The largest screen in physical pixels, width and height each the largest of any screen: what a screen-size
+     * image must cover wherever the window goes (#19). With desktop scaling one JavaFX pixel is several physical ones.
+     */
+    public static Dimension2D largestScreenPixels() {
+        double width = 0;
+        double height = 0;
+        for (Screen screen : Screen.getScreens()) {
+            width = Math.max(width, screen.getBounds().getWidth() * screen.getOutputScaleX());
+            height = Math.max(height, screen.getBounds().getHeight() * screen.getOutputScaleY());
+        }
+        return new Dimension2D(width, height);
     }
 
     /** The screen containing {@code mouse}, or {@code fallback} if the position is unknown or off all screens. */
