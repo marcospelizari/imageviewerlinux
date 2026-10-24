@@ -2,8 +2,10 @@ package linview.image;
 
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -68,6 +70,8 @@ final class LoadScheduler<I> {
     private final Decoder<I> decoder;
 
     private final Map<Path, Kept<I>> kept = new HashMap<>();
+    /** Wanted images whose preload came back too large to keep: not tried again until they leave the window (#57). */
+    private final Set<Path> rejected = new HashSet<>();
     private Path current;
     /** The selection still being served, {@code null} once answered; preloads wait while there is one. */
     private Request selected;
@@ -125,6 +129,7 @@ final class LoadScheduler<I> {
         wanted = List.copyOf(files);
         wantedResolution = minResolution;
         kept.keySet().removeIf(file -> !file.equals(current) && !wanted.contains(file));
+        rejected.retainAll(wanted);
         if (preloading != null && !wanted.contains(preloading) && takeOver == null) {
             stopPreload();
         }
@@ -157,12 +162,16 @@ final class LoadScheduler<I> {
     /**
      * Keeps a result while its image is current or wanted, a failure too, so it isn't retried; but nothing decoded
      * larger than {@link ImageLoader#SHRINK_ABOVE_PIXELS}, e.g. the full image of a huge one for a zoom (#22, #55).
+     *
+     * @return whether it was kept
      */
-    private void keep(Path file, Loaded<I> result, Object state) {
+    private boolean keep(Path file, Loaded<I> result, Object state) {
         double decoded = result.width() * result.height() * result.resolution() * result.resolution();
         if ((file.equals(current) || wanted.contains(file)) && decoded <= ImageLoader.SHRINK_ABOVE_PIXELS) {
             kept.put(file, new Kept<>(result, state));
+            return true;
         }
+        return false;
     }
 
     /** Starts the most wanted image not kept yet, unless the selected image or another preload is loading. */
@@ -171,7 +180,7 @@ final class LoadScheduler<I> {
             return;
         }
         for (Path file : wanted) {
-            if (!kept.containsKey(file)) {
+            if (!kept.containsKey(file) && !rejected.contains(file)) {
                 startPreload(file);
                 return;
             }
@@ -189,7 +198,9 @@ final class LoadScheduler<I> {
             finished[0] = true;
             preloading = null;
             cancelPreload = () -> { };
-            keep(file, result, state);
+            if (!keep(file, result, state) && wanted.contains(file)) {
+                rejected.add(file);   // else it would be decoded again and again
+            }
             Request waiting = takeOver;
             takeOver = null;
             if (waiting != null && !waiting.cancelled && file.equals(current)) {

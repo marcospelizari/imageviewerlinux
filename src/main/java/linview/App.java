@@ -5,8 +5,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import javafx.application.Application;
@@ -42,6 +43,14 @@ public class App extends Application {
     /** Icon sizes in src/main/resources/linview/icons; the desktop picks the best one for each place. */
     static final int[] ICON_SIZES = {16, 32, 48, 64, 128, 256, 512};
 
+    private static ThreadPoolExecutor folderListing() {
+        ThreadPoolExecutor pool = new ThreadPoolExecutor(2, 2, 30, TimeUnit.SECONDS, new ArrayBlockingQueue<>(1),
+                Thread.ofPlatform().name("linview-folders-", 0).daemon().factory(),
+                new ThreadPoolExecutor.DiscardOldestPolicy());
+        pool.allowCoreThreadTimeOut(true);
+        return pool;
+    }
+
     static String iconPath(int size) {
         return "/linview/icons/linview-" + size + ".png";
     }
@@ -55,11 +64,11 @@ public class App extends Application {
     private ViewerController<Image> controller;
     private ImageLoader loader;
     /**
-     * Lists folders off the JavaFX thread (#21), each on its own thread, so a slow folder (USB, network) doesn't hold
-     * up one opened after it (#55). Threads end when idle.
+     * Lists folders off the JavaFX thread (#21). Two at a time, so one slow folder (USB, network) doesn't hold up the
+     * next (#55); at most one more waits, and a newer open replaces it, so stalled folders can't pile up threads (#57).
+     * A listing already running can't be interrupted: its result is ignored. Threads end when idle.
      */
-    private final ExecutorService folders =
-            Executors.newCachedThreadPool(Thread.ofPlatform().name("linview-folders-", 0).daemon().factory());
+    private final ThreadPoolExecutor folders = folderListing();
     private TimingLog timing = TimingLog.OFF;
     private SettingsStore store;
     private Settings settings;
