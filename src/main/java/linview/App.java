@@ -23,13 +23,14 @@ import linview.ui.Keys;
 import linview.ui.ViewerPane;
 import linview.ui.WindowPlacement;
 import linview.viewer.ImageList;
+import linview.viewer.TimingLog;
 import linview.viewer.ViewerController;
 import linview.viewer.Zoom;
 
 /**
  * Entry point and composition root (REPORT.md §6): builds the components, connects them and owns the window.
- * Opens the file or folder given on the command line (R-NAV-01). Keys are in {@link Keys}; what they do is in
- * {@link ViewerController}.
+ * Opens the file or folder given on the command line (R-NAV-01); {@code --timing} turns on the timing log (#23).
+ * Keys are in {@link Keys}; what they do is in {@link ViewerController}.
  */
 public class App extends Application {
 
@@ -40,11 +41,15 @@ public class App extends Application {
         return "/linview/icons/linview-" + size + ".png";
     }
 
+    /** Turns on the timing log (#23): one line per image on standard error, a summary on closing. */
+    static final String TIMING_FLAG = "--timing";
+
     private static final System.Logger LOG = System.getLogger("linview");
 
     private Stage stage;
     private ViewerController<Image> controller;
     private final ImageLoader loader = new ImageLoader();
+    private TimingLog timing = TimingLog.OFF;
 
     @Override
     public void start(Stage stage) {
@@ -52,6 +57,12 @@ public class App extends Application {
         SettingsStore store = new SettingsStore(SettingsStore.defaultFile(),
                 warning -> LOG.log(System.Logger.Level.WARNING, warning));
         Settings settings = store.load();
+        List<String> args = new ArrayList<>(getParameters().getRaw());
+        if (args.remove(TIMING_FLAG)) {
+            timing = TimingLog.toStandardError();
+            // Also when the app is stopped from the terminal (Ctrl+C), which skips stop().
+            Runtime.getRuntime().addShutdownHook(new Thread(timing::summary, "linview-timing-summary"));
+        }
         ViewerPane viewer = new ViewerPane();
         controller = new ViewerController<>(settings, store, loader::load, new ViewerController.Display<>() {
             @Override
@@ -68,7 +79,7 @@ public class App extends Application {
             public void showTitle(String title) {
                 stage.setTitle(title);
             }
-        });
+        }, timing);
         viewer.sendGesturesTo(controller);
         InvalidationListener resized = obs -> controller.resize(viewer.getWidth(), viewer.getHeight());
         viewer.widthProperty().addListener(resized);
@@ -92,7 +103,6 @@ public class App extends Application {
         WindowPlacement.placeOnMouseScreen(stage, scene.getWidth(), scene.getHeight());
         stage.show();
 
-        List<String> args = getParameters().getRaw();
         if (args.isEmpty()) {
             controller.showOpenHintIfEmpty();
         } else {

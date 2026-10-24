@@ -50,6 +50,9 @@ class ViewerControllerTest {
     private Settings settings;
     private Path settingsFile;
     private ViewerController<String> controller;
+    private final List<String> timingLines = new ArrayList<>();
+    /** The timing log's clock, in nanoseconds. */
+    private long now;
 
     @BeforeEach
     void setUp() throws IOException {
@@ -86,12 +89,50 @@ class ViewerControllerTest {
                     public void showTitle(String text) {
                         title = text;
                     }
-                });
+                }, new TimingLog(timingLines::add, () -> now));
         controller.resize(1920, 1080);
     }
 
     private Pending lastLoad() {
         return loads.get(loads.size() - 1);
+    }
+
+    /** #23: shown = from asking for the image until it's handed to the window; load = the loader's own time. */
+    @Test
+    void timingLogsEachImageOnceWhenShown() {
+        now = 1_000_000_000L;
+        controller.open(folder);
+        now += 120_000_000L;
+        lastLoad().done().accept(new Loaded<>("a.jpg", 800, 600, Orientation.UPRIGHT, 100));
+
+        controller.zoomIn();
+        controller.rotateRight();
+
+        assertEquals(List.of("timing  a.jpg  shown 120.0 ms  load 100.0 ms"), timingLines);
+    }
+
+    @Test
+    void timingIgnoresAnImageNoLongerWanted() {
+        controller.open(folder);
+        Pending first = lastLoad();
+        now = 50_000_000L;
+        controller.next();
+        now = 80_000_000L;
+        first.finish(800, 600);
+        assertEquals(List.of(), timingLines);
+
+        lastLoad().finish(800, 600);
+
+        assertEquals(List.of("timing  b.jpg  shown 30.0 ms  load 0.0 ms"), timingLines);
+    }
+
+    @Test
+    void timingLogsAFailedLoad() {
+        controller.open(folder);
+        now = 7_500_000L;
+        lastLoad().done().accept(Loaded.failed());
+
+        assertEquals(List.of("timing  a.jpg  failed after 7.5 ms"), timingLines);
     }
 
     @Test

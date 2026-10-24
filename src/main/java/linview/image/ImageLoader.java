@@ -40,16 +40,21 @@ public final class ImageLoader {
 
     /**
      * Starts loading {@code file}; {@code done} is called once, on the JavaFX thread, when the image is ready or
-     * has failed.
+     * has failed. The result carries the time from this call until the image was ready (#23).
      *
      * @return cancels the load, e.g. when another image was asked for (fast key presses)
      */
     public Runnable load(Path file, Consumer<Loaded<Image>> done) {
+        long start = System.nanoTime();
         Orientation orientation = Orientation.read(file);
         String extension = extension(file);
         return IMAGEIO_EXTENSIONS.contains(extension)
-                ? loadWithImageIO(file, extension, orientation, done)
-                : loadWithJavaFX(file, orientation, done);
+                ? loadWithImageIO(file, extension, orientation, start, done)
+                : loadWithJavaFX(file, orientation, start, done);
+    }
+
+    private static double millisSince(long start) {
+        return (System.nanoTime() - start) / 1e6;
     }
 
     /** Stops the worker thread: a decode still running is interrupted. Called when the app closes. */
@@ -63,7 +68,8 @@ public final class ImageLoader {
         return dot < 0 ? "" : name.substring(dot + 1).toLowerCase(Locale.ROOT);
     }
 
-    private static Runnable loadWithJavaFX(Path file, Orientation orientation, Consumer<Loaded<Image>> done) {
+    private static Runnable loadWithJavaFX(Path file, Orientation orientation, long start,
+                                           Consumer<Loaded<Image>> done) {
         Image image = new Image(file.toUri().toString(), true);
         boolean[] reported = {false};
         Runnable check = () -> {
@@ -75,7 +81,8 @@ public final class ImageLoader {
                 done.accept(Loaded.failed());
             } else if (image.getProgress() >= 1 && image.getWidth() > 0) {
                 reported[0] = true;
-                done.accept(new Loaded<>(image, image.getWidth(), image.getHeight(), orientation));
+                done.accept(new Loaded<>(image, image.getWidth(), image.getHeight(), orientation,
+                        millisSince(start)));
             }
         };
         image.progressProperty().addListener((obs, old, now) -> check.run());
@@ -84,11 +91,11 @@ public final class ImageLoader {
         return image::cancel;
     }
 
-    private Runnable loadWithImageIO(Path file, String extension, Orientation orientation,
+    private Runnable loadWithImageIO(Path file, String extension, Orientation orientation, long start,
                                      Consumer<Loaded<Image>> done) {
         AtomicBoolean cancelled = new AtomicBoolean();
         Future<?> task = worker.submit(() -> {
-            Loaded<Image> result = decode(file, extension, orientation);
+            Loaded<Image> result = decode(file, extension, orientation).timed(millisSince(start));
             Platform.runLater(() -> {
                 if (!cancelled.get()) {
                     done.accept(result);
