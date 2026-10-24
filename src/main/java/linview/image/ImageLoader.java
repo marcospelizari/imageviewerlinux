@@ -36,9 +36,11 @@ import javafx.scene.image.WritableImage;
  *
  * <p>Preloading (#21): {@link #preload} names the images likely to come next; they are loaded one at a time on their
  * own thread and kept, with the current image, in a small window; anything else is dropped. The selected image never
- * waits for a preload: none runs while it loads, and one running is cancelled when another image is selected. A kept
- * image is used only while its file still has the same modified time and size (R4). #20 replaces the window by a
- * cache with a memory budget. All public methods are called on the JavaFX thread.
+ * waits for a preload: none starts while it loads, and one running goes on beside it on its own thread; it is
+ * cancelled only when no longer wanted. A kept image is used only while its file still has the same modified time and
+ * size (R4), checked on the worker thread. Preloads ask for what the zoom mode needs, but never more than 40 MP
+ * decoded, so huge neighbours stay bounded (#55). #20 replaces the window by a cache with a memory budget. All public
+ * methods are called on the JavaFX thread.
  */
 public final class ImageLoader {
 
@@ -74,9 +76,18 @@ public final class ImageLoader {
     private final ExecutorService preloader = daemonThread("linview-preloader");
 
     /** Which image loads when, and the window of kept images (#21). */
-    private final LoadScheduler<Image> scheduler = new LoadScheduler<>(
-            (file, minResolution, preload, done) -> decodeOn(preload ? preloader : worker, file, minResolution, done),
-            Stamp::of);
+    private final LoadScheduler<Image> scheduler = new LoadScheduler<>(new LoadScheduler.Decoder<>() {
+        @Override
+        public Runnable decode(Path file, double minResolution, boolean preload,
+                               BiConsumer<Loaded<Image>, Object> done) {
+            return decodeOn(preload ? preloader : worker, file, minResolution, preload, done);
+        }
+
+        @Override
+        public Runnable stamp(Path file, Consumer<Object> done) {
+            return stampOn(worker, file, done);
+        }
+    });
 
     /** {@code screenWidth} × {@code screenHeight}: the largest screen, in physical pixels. */
     public ImageLoader(double screenWidth, double screenHeight) {
@@ -97,7 +108,8 @@ public final class ImageLoader {
     /**
      * Starts loading {@code file}, the selected image, large enough to cover the screen and with at least
      * {@code minResolution} decoded pixels per real pixel (1 = the full image); {@code done} is called once, on the
-     * JavaFX thread, when the image is ready or has failed, at once for a kept image (load time 0). The result carries
+     * JavaFX thread, when the image is ready or has failed; for a kept image (load time 0) once a check on the worker
+     * thread finds its file unchanged. The result carries
      * the time from this call until the image was ready (#23).
      *
      * @return cancels the load, e.g. when another image was asked for (fast key presses)
@@ -106,16 +118,36 @@ public final class ImageLoader {
         return scheduler.load(file, minResolution, done);
     }
 
-    /** The images likely to come next, most wanted first (#21); see {@link LoadScheduler#preload}. */
+    /**
+     * The images likely to come next, most wanted first (#21), with what the zoom mode needs but at most 40 MP decoded
+     * (#55); see {@link LoadScheduler}.
+     */
     public void preload(List<Path> files, double minResolution) {
         scheduler.preload(files, minResolution);
+    }
+
+    /** The file's state, read on {@code lane} (a USB disk or network mount can be slow), answered on JavaFX's. */
+    private static Runnable stampOn(ExecutorService lane, Path file, Consumer<Object> done) {
+        AtomicBoolean cancelled = new AtomicBoolean();
+        Future<?> task = lane.submit(() -> {
+            Stamp stamp = Stamp.of(file);
+            Platform.runLater(() -> {
+                if (!cancelled.get()) {
+                    done.accept(stamp);
+                }
+            });
+        });
+        return () -> {
+            cancelled.set(true);
+            task.cancel(false);
+        };
     }
 
     /**
      * Decodes {@code file} on {@code lane}; {@code done} gets the result with the file's state when loading began,
      * on the JavaFX thread, unless cancelled first.
      */
-    private Runnable decodeOn(ExecutorService lane, Path file, double minResolution,
+    private Runnable decodeOn(ExecutorService lane, Path file, double minResolution, boolean preload,
                               BiConsumer<Loaded<Image>, Object> done) {
         long start = System.nanoTime();
         String extension = extension(file);
@@ -123,7 +155,7 @@ public final class ImageLoader {
         Runnable[] cancelJavaFX = {() -> { }};   // only touched on the JavaFX thread
         Future<?> task = lane.submit(() -> {
             try {
-                decodeSteps(file, extension, minResolution, start, cancelled, cancelJavaFX, done);
+                decodeSteps(file, extension, minResolution, preload, start, cancelled, cancelJavaFX, done);
             } catch (Throwable e) {
                 // Never leave a load unanswered: an unexpected error (a native library failing, say) would otherwise
                 // vanish inside the Future and the image would stay "loading" for ever.
@@ -143,14 +175,16 @@ public final class ImageLoader {
     }
 
     /** The worker-thread part of {@link #decodeOn}: file state, EXIF, size, then the decode or JavaFX's load. */
-    private void decodeSteps(Path file, String extension, double minResolution, long start, AtomicBoolean cancelled,
+    private void decodeSteps(Path file, String extension, double minResolution, boolean preload, long start,
+                             AtomicBoolean cancelled,
                              Runnable[] cancelJavaFX, BiConsumer<Loaded<Image>, Object> done) {
         {
             Stamp stamp = Stamp.of(file);
             ImageHeader header = ImageHeader.read(file);
             Orientation orientation = header.orientation();
             if (IMAGEIO_EXTENSIONS.contains(extension)) {
-                Loaded<Image> result = decode(file, extension, orientation, minResolution).timed(millisSince(start));
+                Loaded<Image> result = decode(file, extension, orientation, minResolution, preload)
+                        .timed(millisSince(start));
                 Platform.runLater(() -> {
                     if (!cancelled.get()) {
                         done.accept(result, stamp);
@@ -158,7 +192,7 @@ public final class ImageLoader {
                 });
             } else {
                 double scale = header.hasSize()
-                        ? decodeScale(header.width(), header.height(), orientation, minResolution) : 1;
+                        ? decodeScale(header.width(), header.height(), orientation, minResolution, preload) : 1;
                 Platform.runLater(() -> {
                     if (!cancelled.get()) {
                         cancelJavaFX[0] = loadWithJavaFX(file, header, scale, start,
@@ -193,18 +227,25 @@ public final class ImageLoader {
         return Math.min(1, Math.max(screenWidth / uprightWidth, screenHeight / uprightHeight));
     }
 
-    private double decodeScale(double width, double height, Orientation orientation, double minResolution) {
-        return decodeScale(width, height, orientation, minResolution, screenWidth, screenHeight);
+    private double decodeScale(double width, double height, Orientation orientation, double minResolution,
+                               boolean preload) {
+        return decodeScale(width, height, orientation, minResolution, preload, screenWidth, screenHeight);
     }
 
-    /** 1 up to {@link #SHRINK_ABOVE_PIXELS}; above, the screen's scale raised to {@code minResolution}, at most 1. */
+    /**
+     * 1 up to {@link #SHRINK_ABOVE_PIXELS}; above, the screen's scale raised to {@code minResolution}, at most 1. A
+     * {@code preload} asks for no more than {@link #SHRINK_ABOVE_PIXELS} decoded pixels (#55): zoom lock at 25 % gets
+     * its 25 % ahead of time, but a huge neighbour is never decoded in full for actual size before it is selected.
+     */
     static double decodeScale(double width, double height, Orientation orientation, double minResolution,
-                              double screenWidth, double screenHeight) {
+                              boolean preload, double screenWidth, double screenHeight) {
         if (width * height <= SHRINK_ABOVE_PIXELS) {
             return 1;
         }
         double screen = screenScale(width, height, orientation, screenWidth, screenHeight);
-        return Math.min(1, Math.max(screen, minResolution));
+        double wanted = preload ? Math.min(minResolution, Math.sqrt(SHRINK_ABOVE_PIXELS / (width * height)))
+                : minResolution;
+        return Math.min(1, Math.max(screen, wanted));
     }
 
     /** ImageIO keeps every {@code n}-th pixel: the largest {@code n} whose copy is still at least {@code scale}. */
@@ -255,7 +296,8 @@ public final class ImageLoader {
      * covers the screen and {@code minResolution}. The reader is chosen by extension, since TGA has no signature to
      * recognise it by.
      */
-    private Loaded<Image> decode(Path file, String extension, Orientation orientation, double minResolution) {
+    private Loaded<Image> decode(Path file, String extension, Orientation orientation, double minResolution,
+                                 boolean preload) {
         try {
             Iterator<ImageReader> readers = ImageIO.getImageReadersBySuffix(extension);
             if (!readers.hasNext()) {
@@ -273,7 +315,7 @@ public final class ImageLoader {
                 width = reader.getWidth(0);
                 height = reader.getHeight(0);
                 ImageReadParam param = reader.getDefaultReadParam();
-                int step = subsampling(decodeScale(width, height, orientation, minResolution));
+                int step = subsampling(decodeScale(width, height, orientation, minResolution, preload));
                 if (step > 1) {
                     param.setSourceSubsampling(step, step, 0, 0);
                 }

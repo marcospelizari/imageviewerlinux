@@ -72,11 +72,27 @@ class ImageLoaderTest {
     /** Normal photos load whole, as before; only very large images get a screen-size copy. */
     @Test
     void onlyVeryLargeImagesAreShrunk() {
-        assertEquals(1, ImageLoader.decodeScale(6000, 4000, Orientation.UPRIGHT, 0, 1920, 1080));   // 24 MP
-        assertEquals(1, ImageLoader.decodeScale(7745, 5164, Orientation.UPRIGHT, 0, 1920, 1080));   // ≈ 40 MP
-        assertEquals(1920.0 / 17869, ImageLoader.decodeScale(17869, 12802, Orientation.UPRIGHT, 0, 1920, 1080), 1e-9);
+        assertEquals(1, ImageLoader.decodeScale(6000, 4000, Orientation.UPRIGHT, 0, false, 1920, 1080));   // 24 MP
+        assertEquals(1, ImageLoader.decodeScale(7745, 5164, Orientation.UPRIGHT, 0, false, 1920, 1080));   // ≈ 40 MP
+        assertEquals(1920.0 / 17869, ImageLoader.decodeScale(17869, 12802, Orientation.UPRIGHT, 0, false, 1920, 1080), 1e-9);
         // The zoom mode can ask for more: zoom lock at 50 %, actual size.
-        assertEquals(0.5, ImageLoader.decodeScale(17869, 12802, Orientation.UPRIGHT, 0.5, 1920, 1080));
-        assertEquals(1, ImageLoader.decodeScale(17869, 12802, Orientation.UPRIGHT, 1, 1920, 1080));
+        assertEquals(0.5, ImageLoader.decodeScale(17869, 12802, Orientation.UPRIGHT, 0.5, false, 1920, 1080));
+        assertEquals(1, ImageLoader.decodeScale(17869, 12802, Orientation.UPRIGHT, 1, false, 1920, 1080));
+    }
+
+    /** #55: a preload asks for what the zoom needs, but never more than 40 MP decoded. */
+    @Test
+    void preloadsOfHugeImagesStayWithin40Megapixels() {
+        double cap317 = Math.sqrt(40e6 / (29437.0 * 10751));   // ≈ 0.355
+        // Zoom lock at 25 %: within the cap, so the preload is as sharp as the zoom.
+        assertEquals(0.25, ImageLoader.decodeScale(29437, 10751, Orientation.UPRIGHT, 0.25, true, 1920, 1080));
+        // Actual size: capped; the full image waits until it is selected.
+        assertEquals(cap317, ImageLoader.decodeScale(29437, 10751, Orientation.UPRIGHT, 1, true, 1920, 1080), 1e-9);
+        assertEquals(1, ImageLoader.decodeScale(29437, 10751, Orientation.UPRIGHT, 1, false, 1920, 1080));
+        // Fit: the screen copy, as for the selected image.
+        assertEquals(1080.0 / 10751, ImageLoader.decodeScale(29437, 10751, Orientation.UPRIGHT, 0, true, 1920, 1080),
+                1e-9);
+        // Normal photos load whole either way.
+        assertEquals(1, ImageLoader.decodeScale(6000, 4000, Orientation.UPRIGHT, 1, true, 1920, 1080));
     }
 }

@@ -86,6 +86,11 @@ class ViewerControllerTest {
 
     /** A controller over the fakes; {@code background} runs folder listings (#21). */
     private ViewerController<String> newController(Executor background) {
+        return newController(background, Runnable::run);
+    }
+
+    /** {@code onJavaFXThread} hands listing results back to the controller. */
+    private ViewerController<String> newController(Executor background, Executor onJavaFXThread) {
         return new ViewerController<>(settings, store,
                 new ViewerController.ImageSource<>() {
                     @Override
@@ -123,7 +128,7 @@ class ViewerControllerTest {
                     public void showTitle(String text) {
                         title = text;
                     }
-                }, new TimingLog(timingLines::add, () -> now), background, Runnable::run);
+                }, new TimingLog(timingLines::add, () -> now), background, onJavaFXThread);
     }
 
     /** Lets a background write finish before the temporary folder is removed. */
@@ -152,16 +157,17 @@ class ViewerControllerTest {
         assertEquals(List.of("b.jpg"), preloads.get(3));   // at the last image: nothing ahead, b behind
     }
 
-    /** Preloads are decoded like the image on screen would be, for the zoom mode (#19, #21). */
+    /** Preloads ask for what the zoom mode needs (#21); the loader caps huge images (#55). */
     @Test
     void preloadsAskForWhatTheZoomModeNeeds() {
         controller.open(folder);
         assertEquals(0, preloadResolution);
 
-        controller.setZoomMode(Zoom.Mode.ACTUAL);
+        settings.setZoomPercent(25);
+        controller.setZoomMode(Zoom.Mode.LOCK);
         controller.next();
 
-        assertEquals(1, preloadResolution);
+        assertEquals(0.25, preloadResolution);
     }
 
     @Test
@@ -195,6 +201,26 @@ class ViewerControllerTest {
 
         assertEquals("x.jpg", shownImage);
         assertEquals("x.jpg — 1/1 — 800×600 — 100% — linview", title);
+    }
+
+    /** #55: a listing for an earlier open that hasn't started when its turn comes is skipped, not run. */
+    @Test
+    void aSupersededListingIsSkipped() throws IOException {
+        List<Runnable> listings = new ArrayList<>();
+        List<Runnable> results = new ArrayList<>();
+        controller = newController(listings::add, results::add);
+        controller.resize(1920, 1080);
+        Path other = Files.createDirectory(folder.resolve("other"));
+        Files.createFile(other.resolve("x.jpg"));
+
+        controller.open(folder);
+        controller.open(other);
+        listings.get(0).run();
+
+        assertEquals(List.of(), results);   // nothing listed, nothing handed back
+        listings.get(1).run();
+        results.forEach(Runnable::run);
+        assertEquals(List.of("x.jpg"), loads.stream().map(l -> l.file().getFileName().toString()).toList());
     }
 
     /** A listing for an earlier open that finishes late is ignored. */

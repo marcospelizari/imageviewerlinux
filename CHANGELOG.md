@@ -10,9 +10,11 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - `./gradlew appImage` builds a packaged app in `build/jpackage/linview` (jpackage app image, about 100 MB) with its own Java runtime and JavaFX: it starts without Gradle or an installed Java, also with spaces and accents in the path. No installer or `.desktop` file yet (#54)
 
 ### Fixed
+- Selecting an image that was already preloaded no longer reads the disk on the UI thread: the check that its file is unchanged runs in the background, so a slow USB disk or network folder can't freeze the window. A folder that is slow to list no longer holds up one opened after it, and a listing no longer wanted is skipped (#55)
 - JPEGs never showed in the packaged app on systems without `libjpeg.so.8` (e.g. Fedora/Bazzite; since #19): the image size is now read with metadata-extractor in the same pass as the EXIF orientation, instead of Java's native JPEG reader. A load that fails unexpectedly now shows the usual "Can't show" message and is logged, instead of staying "loading" forever (#21)
 
 ### Changed
+- Preloads ask for what the zoom mode needs, but a very large neighbour (over 40 MP) is decoded to at most 40 MP: zoom lock at 25 % still gets huge images preloaded at 25 %, while actual size no longer preloads them in full, which could run out of memory; they are decoded in full when selected. Nothing decoded over 40 MP is kept. A preload that is still wanted keeps running when another image is selected instead of being cancelled: JavaFX can't stop a decode it has started, so cancelling only wasted it and decoded the image again later (#55)
 - Settings are saved in the background, never on the UI thread: quick changes in a row (Ctrl + wheel with zoom lock on) end in one write of the newest values, and closing the app writes a change still pending. The file is still replaced only after the new one is fully written. Settings are read before the window opens (#52)
 - Version 0.1.0 in `build.gradle`, matching the `v0.1.0` tag (#54)
 

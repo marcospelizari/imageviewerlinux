@@ -54,8 +54,9 @@ public final class ViewerController<I> {
         Runnable load(Path file, double minResolution, Consumer<Loaded<I>> done);
 
         /**
-         * The images likely to come next, most wanted first (#21), each with at least {@code minResolution}: load
-         * them in the background without delaying {@link #load}, and drop others. Called after each {@code load}.
+         * The images likely to come next, most wanted first (#21), each with what the zoom mode needs
+         * ({@code minResolution}) as far as memory allows (#55): load them in the background without delaying
+         * {@link #load}, and drop others. Called after each {@code load}.
          */
         void preload(List<Path> files, double minResolution);
     }
@@ -94,8 +95,11 @@ public final class ViewerController<I> {
 
     /** The open folder; {@code null} when nothing is open. */
     private ImageList images;
-    /** Identity of the latest {@link #open}: a folder listed for an earlier one is ignored (#21). */
-    private long opening;
+    /**
+     * Identity of the latest {@link #open}: a folder listed for an earlier one is ignored (#21), and one not started
+     * yet is skipped (#55). Read by the listing thread, hence volatile.
+     */
+    private volatile long opening;
     /** The direction of the last move, which preloading follows (#21). */
     private boolean forward = true;
     /** Identity of the latest load: a result for an earlier one is ignored, even if it can't be cancelled. */
@@ -142,11 +146,15 @@ public final class ViewerController<I> {
     /**
      * Opens a folder, or an image and its folder (R-NAV-01); problems are shown as a message. The folder is listed and
      * sorted in the background (#21); until then the image on screen stays and can still be navigated. A listing for
-     * an earlier open is ignored.
+     * an earlier open is skipped if it hasn't started, and its result ignored if it has (#55): a listing already
+     * running on a slow disk can't be interrupted.
      */
     public void open(Path path) {
         long id = ++opening;
         background.execute(() -> {
+            if (id != opening) {
+                return;   // another folder was opened meanwhile
+            }
             ImageList list = null;
             String problem = null;
             try {
