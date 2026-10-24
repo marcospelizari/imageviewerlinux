@@ -1,17 +1,27 @@
 package linview.ui;
 
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import javafx.animation.PauseTransition;
+import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
 import javafx.scene.Cursor;
 import javafx.scene.Group;
 import javafx.scene.control.Label;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.image.PixelFormat;
+import javafx.scene.image.WritableImage;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.StackPane;
 import javafx.scene.shape.Rectangle;
 import javafx.stage.Window;
+import javafx.util.Duration;
 
+import linview.image.ImageResampler;
 import linview.image.Loaded;
 import linview.image.Orientation;
 import linview.viewer.ViewerController;
@@ -25,6 +35,12 @@ import linview.viewer.Zoom;
  * <p>The controller works in physical screen pixels, so actual size is one image pixel per screen pixel at any desktop
  * scaling (R-DISP-01, #46); this pane is the one place that converts, with the window's render scale (2 at 200 %
  * scaling). Moving the window to a monitor with other scaling changes it, which counts as a resize.
+ *
+ * <p>Sharp redraw (R-ZOOM-06, #24): the graphics card's scaling shows at once; when the image is shown smaller than
+ * its pixels, {@link #SETTLE} after the last change the whole image is shrunk with Lanczos on a background thread
+ * and swapped in, one physical pixel per screen pixel. Any change starts again; a late result for another image or
+ * scale is dropped, and a drag keeps the sharp copy. Not for animated GIFs (it would stop them) or images over
+ * {@link ImageResampler#MAX_SOURCE_PIXELS}.
  */
 public final class ViewerPane extends StackPane {
 
@@ -35,6 +51,20 @@ public final class ViewerPane extends StackPane {
     private ViewerController<Image> controller;
     /** Physical pixels per JavaFX pixel. */
     private double scale = 1;
+
+    static final Duration SETTLE = Duration.millis(150);
+    private final PauseTransition settle = new PauseTransition(SETTLE);
+    private final ExecutorService resampler = Executors.newSingleThreadExecutor(task -> {
+        Thread thread = new Thread(task, "linview-resampler");
+        thread.setDaemon(true);
+        return thread;
+    });
+    /** Counts redraws; one whose number is no longer this is stale. Read by the resampler thread. */
+    private volatile long redraw;
+    /** The sharp copy on screen, the image it was made from and the zoom it is for; {@code null} when none. */
+    private Image sharp;
+    private Image sharpSource;
+    private double sharpScale;
     /** The image is larger than the pane on some side, so a drag moves it. */
     private boolean pannable;
     private boolean dragging;
@@ -123,10 +153,15 @@ public final class ViewerPane extends StackPane {
         // ImageView scales before it rotates, both around its centre: mirror first, then rotate, as EXIF defines.
         view.setScaleX(orientation.mirror() ? -1 : 1);
         view.setRotate(orientation.degrees());
-        view.setImage(image);
-        // The fit sizes apply before turning, so they use the stored width and height.
-        view.setFitWidth(loaded.width() * v.scale() / scale);
-        view.setFitHeight(loaded.height() * v.scale() / scale);
+        if (sharp != null && image == sharpSource && v.scale() == sharpScale) {
+            showSharp();   // only moved, e.g. a drag
+        } else {
+            view.setImage(image);
+            // The fit sizes apply before turning, so they use the stored width and height.
+            view.setFitWidth(loaded.width() * v.scale() / scale);
+            view.setFitHeight(loaded.height() * v.scale() / scale);
+            redrawSharp(loaded, v.scale());
+        }
         turned.relocate(Math.round(v.x()) / scale, Math.round(v.y()) / scale);
 
         double width = loaded.uprightWidth() * v.scale() / scale;
@@ -136,9 +171,76 @@ public final class ViewerPane extends StackPane {
     }
 
     public void showMessage(String text) {
+        stopRedraw();
         view.setImage(null);
         message.setText(text);
         setPannable(false);
+    }
+
+    private void showSharp() {
+        view.setImage(sharp);
+        view.setFitWidth(sharp.getWidth() / scale);
+        view.setFitHeight(sharp.getHeight() / scale);
+    }
+
+    private void stopRedraw() {
+        redraw++;
+        settle.stop();
+        sharp = null;
+        sharpSource = null;
+    }
+
+    /** Starts the sharp redraw of {@code loaded} at {@code zoom} once the view has settled, if it shrinks. */
+    private void redrawSharp(Loaded<Image> loaded, double zoom) {
+        stopRedraw();
+        Image image = loaded.image();
+        int toWidth = (int) Math.round(loaded.width() * zoom);
+        int toHeight = (int) Math.round(loaded.height() * zoom);
+        if (toWidth < 1 || toHeight < 1 || toWidth >= image.getWidth()
+                || image.getWidth() * image.getHeight() > ImageResampler.MAX_SOURCE_PIXELS || isGif(image)) {
+            return;
+        }
+        long id = redraw;
+        settle.setOnFinished(e -> resampler.execute(() -> resample(id, image, zoom, toWidth, toHeight)));
+        settle.playFromStart();
+    }
+
+    /** On the resampler thread; the result is shown only if nothing changed meanwhile. */
+    private void resample(long id, Image image, double zoom, int toWidth, int toHeight) {
+        if (redraw != id) {
+            return;
+        }
+        try {
+            int width = (int) image.getWidth();
+            int height = (int) image.getHeight();
+            int[] pixels = new int[width * height];
+            image.getPixelReader().getPixels(0, 0, width, height, PixelFormat.getIntArgbPreInstance(), pixels, 0,
+                    width);
+            int[] shrunk = ImageResampler.lanczos(pixels, width, height, toWidth, toHeight, () -> redraw != id);
+            if (shrunk == null) {
+                return;
+            }
+            WritableImage result = new WritableImage(toWidth, toHeight);
+            result.getPixelWriter().setPixels(0, 0, toWidth, toHeight, PixelFormat.getIntArgbPreInstance(), shrunk, 0,
+                    toWidth);
+            Platform.runLater(() -> {
+                if (redraw == id) {
+                    sharp = result;
+                    sharpSource = image;
+                    sharpScale = zoom;
+                    showSharp();
+                }
+            });
+        } catch (OutOfMemoryError | RuntimeException e) {
+            // The graphics card's version stays: less sharp, still correct.
+            System.getLogger("linview").log(System.Logger.Level.WARNING, "Sharp redraw skipped: " + e);
+        }
+    }
+
+    /** JavaFX loads GIFs from their file; an animated one would stop on its first frame. */
+    private static boolean isGif(Image image) {
+        String url = image.getUrl();
+        return url != null && url.toLowerCase(Locale.ROOT).endsWith(".gif");
     }
 
     /** Grab hand while there is something to drag; the closed hand stays until the drag ends. */
