@@ -3,6 +3,7 @@ package linview.viewer;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -59,6 +60,8 @@ class ViewerControllerTest {
     private Zoom.View shownView;
     private Orientation shownOrientation;
     private String message;
+    private List<Path> stripFiles = List.of();
+    private int stripIndex = -1;
     private String title;
     private Settings settings;
     private Path settingsFile;
@@ -128,6 +131,12 @@ class ViewerControllerTest {
                     public void showTitle(String text) {
                         title = text;
                     }
+
+                    @Override
+                    public void showPosition(List<Path> files, int index) {
+                        stripFiles = files;
+                        stripIndex = index;
+                    }
                 }, new TimingLog(timingLines::add, () -> now), background, onJavaFXThread);
     }
 
@@ -155,6 +164,28 @@ class ViewerControllerTest {
 
         controller.next();
         assertEquals(List.of("b.jpg"), preloads.get(3));   // at the last image: nothing ahead, b behind
+    }
+
+    /** #28: the strip gets the folder and the selected image; a thumbnail click selects, and preloads follow it. */
+    @Test
+    void theStripFollowsTheSelectionAndSelectsAnImage() {
+        controller.open(folder);
+        List<Path> files = stripFiles;
+        assertEquals(List.of("a.jpg", "b.jpg", "c.jpg"),
+                files.stream().map(f -> f.getFileName().toString()).toList());
+        assertEquals(0, stripIndex);
+
+        controller.select(2);
+        assertEquals(2, stripIndex);
+        assertSame(files, stripFiles);   // same folder, same list: the strip needn't rebuild
+        assertEquals("c.jpg — 3/3 — linview", title);
+        assertEquals(List.of("b.jpg"), preloads.get(1));   // moved forward to the end: one behind only
+
+        controller.select(1);
+        assertEquals(List.of("a.jpg", "c.jpg"), preloads.get(2));   // moved back: a ahead, c behind
+        int loads = this.loads.size();
+        controller.select(1);
+        assertEquals(loads, this.loads.size());   // already shown: nothing happens
     }
 
     /** Preloads ask for what the zoom mode needs (#21); the loader caps huge images (#55). */

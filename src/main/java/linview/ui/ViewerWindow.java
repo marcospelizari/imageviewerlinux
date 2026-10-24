@@ -5,14 +5,18 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import java.nio.file.Path;
+
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
+import javafx.scene.layout.StackPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import linview.image.Loaded;
+import linview.image.ThumbnailLoader;
 import linview.settings.Settings;
 import linview.viewer.ImageList;
 import linview.viewer.ViewerController;
@@ -30,10 +34,13 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
 
     private final Stage stage;
     private final ViewerPane viewer = new ViewerPane();
+    private final ThumbStrip strip;
     private ViewerController<Image> controller;
 
-    public ViewerWindow(Stage stage) {
+    /** {@code thumbnails} fills the full-screen thumbnail strip (#28). */
+    public ViewerWindow(Stage stage, ThumbnailLoader thumbnails) {
         this.stage = stage;
+        strip = new ThumbStrip(thumbnails, index -> controller.select(index));
     }
 
     static String iconPath(int size) {
@@ -49,7 +56,11 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
         viewer.connect(controller, stage);
         viewer.setBackgroundColour(settings.backgroundColour());
 
-        Scene scene = new Scene(viewer, 1024, 700);
+        EdgePanels panels = new EdgePanels(stage, viewer);
+        panels.setTop(strip, strip::scrollToCurrent);
+        Scene scene = new Scene(new StackPane(viewer, panels.layer()), 1024, 700);
+        scene.getStylesheets().add(ViewerWindow.class.getResource("/linview/viewer.css").toExternalForm());
+        panels.watch(scene);
         scene.setOnKeyPressed(this::keyPressed);
         scene.setOnMouseClicked(e -> {
             // A drag that ends where it started is not a click (R-ZOOM-05).
@@ -135,5 +146,10 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
     @Override
     public void showTitle(String title) {
         stage.setTitle(title);
+    }
+
+    @Override
+    public void showPosition(List<Path> files, int index) {
+        strip.show(files, index);
     }
 }

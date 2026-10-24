@@ -71,6 +71,12 @@ public final class ViewerController<I> {
         void showMessage(String text);
 
         void showTitle(String title);
+
+        /**
+         * The open folder's images and which one is selected (0-based), for the thumbnail strip (#28); an empty list
+         * when nothing is open. The list is the same object while the folder stays open.
+         */
+        void showPosition(List<Path> files, int index);
     }
 
     /**
@@ -216,6 +222,14 @@ public final class ViewerController<I> {
     }
 
     /** From the first image the way on is forward, from the last one backward. */
+    /** Goes to the image at {@code index} (0-based), e.g. a thumbnail clicked (#28). */
+    public void select(int index) {
+        if (images != null) {
+            forward = index >= images.position() - 1;
+            moveTo(images.at(index));
+        }
+    }
+
     public void first() {
         forward = true;
         moveTo(images == null ? null : images.first());
@@ -412,6 +426,7 @@ public final class ViewerController<I> {
         shown = null;
         view = null;
         display.showTitle(TITLE);
+        display.showPosition(List.of(), -1);
         display.showMessage(message);
     }
 
@@ -424,6 +439,7 @@ public final class ViewerController<I> {
         fullRequested = false;
         Path file = images.current();
         display.showTitle(title(file.getFileName().toString(), images.position(), images.size(), 0, 0, 0, false));
+        display.showPosition(images.files(), images.position() - 1);
         // The new request is current before loading starts, so a result that arrives at once is accepted and a
         // late one for the previous image is ignored.
         long id = ++request;

@@ -1,0 +1,35 @@
+/* Full-screen panels (#27, #28): dark, semi-transparent, floating over the image (REPORT.md §3.3). */
+.thumb-strip {
+    -fx-background-color: rgba(0, 0, 0, 0.7);
+    -fx-background-insets: 0;
+    -fx-padding: 6 8 6 8;
+}
+
+.thumb-strip .virtual-flow,
+.thumb-strip .clipped-container,
+.thumb-strip .sheet {
+    -fx-background-color: transparent;
+}
+
+/* Scrolled with the wheel; no scroll bar taking room. */
+.thumb-strip .scroll-bar {
+    -fx-pref-height: 0;
+    -fx-max-height: 0;
+    -fx-opacity: 0;
+}
+
+.thumb-strip .list-cell {
+    -fx-background-color: transparent;
+    -fx-padding: 4;
+    -fx-alignment: center;
+}
+
+.thumb-strip .list-cell:hover {
+    -fx-background-color: rgba(255, 255, 255, 0.12);
+    -fx-background-radius: 4;
+}
+
+.thumb-strip .list-cell:current {
+    -fx-background-color: rgba(255, 255, 255, 0.35);
+    -fx-background-radius: 4;
+}

@@ -1,5 +1,6 @@
 package linview.image;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import org.junit.jupiter.api.Test;
@@ -41,5 +42,26 @@ class OrientationTest {
         assertEquals(Orientation.UPRIGHT, Orientation.of(8).rotated(1));
         assertEquals(new Orientation(0, true), Orientation.of(5).rotated(5));
         assertEquals(Orientation.UPRIGHT, Orientation.UPRIGHT.rotated(4));
+    }
+
+    /**
+     * #28: thumbnails are stored upright. A 3 × 2 image, pixels numbered row by row:
+     * <pre>
+     * 1 2 3
+     * 4 5 6
+     * </pre>
+     */
+    @Test
+    void pixelsAreTurnedUprightForEveryExifValue() {
+        int[] stored = {1, 2, 3, 4, 5, 6};
+        assertArrayEquals(new int[] {1, 2, 3, 4, 5, 6}, Orientation.of(1).turn(stored, 3, 2));
+        assertArrayEquals(new int[] {3, 2, 1, 6, 5, 4}, Orientation.of(2).turn(stored, 3, 2));   // mirrored
+        assertArrayEquals(new int[] {6, 5, 4, 3, 2, 1}, Orientation.of(3).turn(stored, 3, 2));   // 180
+        assertArrayEquals(new int[] {4, 5, 6, 1, 2, 3}, Orientation.of(4).turn(stored, 3, 2));   // flipped
+        // Sideways: the result is 2 wide, 3 high.
+        assertArrayEquals(new int[] {1, 4, 2, 5, 3, 6}, Orientation.of(5).turn(stored, 3, 2));   // transposed
+        assertArrayEquals(new int[] {4, 1, 5, 2, 6, 3}, Orientation.of(6).turn(stored, 3, 2));   // 90 clockwise
+        assertArrayEquals(new int[] {6, 3, 5, 2, 4, 1}, Orientation.of(7).turn(stored, 3, 2));   // transverse
+        assertArrayEquals(new int[] {3, 6, 2, 5, 1, 4}, Orientation.of(8).turn(stored, 3, 2));   // 270 clockwise
     }
 }
