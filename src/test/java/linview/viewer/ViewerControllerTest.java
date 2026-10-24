@@ -62,6 +62,7 @@ class ViewerControllerTest {
     private String message;
     private List<Path> stripFiles = List.of();
     private int stripIndex = -1;
+    private String zoomShown = "";
     private String title;
     private Settings settings;
     private Path settingsFile;
@@ -136,6 +137,12 @@ class ViewerControllerTest {
                     public void showPosition(List<Path> files, int index) {
                         stripFiles = files;
                         stripIndex = index;
+                    }
+
+                    @Override
+                    public void showZoom(double width, double height, double percent, boolean locked) {
+                        zoomShown = width > 0 ? String.format("%.0f×%.0f %s%%%s", width, height, percent,
+                                locked ? " locked" : "") : "";
                     }
                 }, new TimingLog(timingLines::add, () -> now), background, onJavaFXThread);
     }
@@ -336,6 +343,55 @@ class ViewerControllerTest {
 
         assertTrue(lastLoad().full());
         assertEquals(2, loads.size());
+    }
+
+    /** #29: a typed % is like + / −: only this image; the next one starts from the mode again. */
+    @Test
+    void aTypedPercentZoomsOnlyTheImageOnScreen() {
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        assertEquals("800×600 100.0%", zoomShown);   // fit never enlarges
+
+        controller.zoomToPercent(52.5);
+        assertEquals(0.525, shownView.scale(), 1e-9);
+        assertEquals("800×600 52.5%", zoomShown);
+
+        controller.next();
+        lastLoad().finish(800, 600);
+        assertEquals(1, shownView.scale(), 1e-9);
+    }
+
+    /** #29: with zoom lock on, a typed % changes the locked %, which is saved. */
+    @Test
+    void aTypedPercentChangesTheLockedZoom() throws IOException {
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        controller.toggleZoomLock();
+        controller.zoomToPercent(40);
+        assertEquals("800×600 40.0% locked", zoomShown);
+
+        controller.next();
+        lastLoad().finish(800, 600);
+        assertEquals(0.4, shownView.scale(), 1e-9);
+        store.flush();
+        assertTrue(Files.readString(settingsFile).contains("zoom.percent=40"));
+    }
+
+    @Test
+    void theTaskbarIsEmptyWhenNothingIsOpen() throws IOException {
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        controller.open(folder.resolve("missing"));
+        assertEquals("", zoomShown);
+    }
+
+    /** #45: the overlay's text; the file name is optional. */
+    @Test
+    void theOverlayShowsTheCounterAndOptionallyTheName() {
+        assertEquals("2/16", ViewerController.overlayText("a.jpg", 2, 16, true, false));
+        assertEquals("a.jpg  2/16", ViewerController.overlayText("a.jpg", 2, 16, true, true));
+        assertEquals("a.jpg", ViewerController.overlayText("a.jpg", 2, 16, false, true));
+        assertEquals("", ViewerController.overlayText("a.jpg", 2, 16, false, false));
     }
 
     /** The full image belongs to one image: moving on cancels it, and a late one is ignored. */

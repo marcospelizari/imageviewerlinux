@@ -83,7 +83,10 @@ public final class SettingsStore {
         read(p, "zoom.percent", format(s.zoomPercent()), text -> s.setZoomPercent(Double.parseDouble(text)));
         read(p, "wheel", name(s.wheel()), text -> s.setWheel(choice(Settings.Wheel.class, text)));
         read(p, "background", s.background(), s::setBackground);
+        read(p, "overlay.counter", String.valueOf(s.counterOverlay()), text -> s.setCounterOverlay(flag(text)));
         read(p, "overlay.fileName", String.valueOf(s.fileNameOverlay()), text -> s.setFileNameOverlay(flag(text)));
+        read(p, "overlay.corner", name(s.overlayCorner()),
+                text -> s.setOverlayCorner(choice(Settings.Corner.class, text)));
         read(p, "start.fullScreen", String.valueOf(s.fullScreen()), text -> s.setFullScreen(flag(text)));
 
         // A position needs both x and y; with only one, the window opens on the mouse's monitor.
@@ -158,7 +161,9 @@ public final class SettingsStore {
                 "zoom.percent=" + format(s.zoomPercent()),
                 "wheel=" + name(s.wheel()),
                 "background=" + s.background(),
+                "overlay.counter=" + s.counterOverlay(),
                 "overlay.fileName=" + s.fileNameOverlay(),
+                "overlay.corner=" + name(s.overlayCorner()),
                 "start.fullScreen=" + s.fullScreen(),
                 "window.x=" + (s.windowX() == null ? "" : format(s.windowX())),
                 "window.y=" + (s.windowY() == null ? "" : format(s.windowY())),
@@ -192,7 +197,7 @@ public final class SettingsStore {
     }
 
     private static <E extends Enum<E>> E choice(Class<E> type, String text) {
-        return Enum.valueOf(type, text.toUpperCase(Locale.ROOT));
+        return Enum.valueOf(type, text.toUpperCase(Locale.ROOT).replace('-', '_'));   // bottom-left → BOTTOM_LEFT
     }
 
     private static boolean flag(String text) {
@@ -216,7 +221,7 @@ public final class SettingsStore {
     }
 
     private static String name(Enum<?> value) {
-        return value.name().toLowerCase(Locale.ROOT);
+        return value.name().toLowerCase(Locale.ROOT).replace('_', '-');
     }
 
     /** {@code 100} rather than {@code 100.0}; decimals are kept when there are any. */

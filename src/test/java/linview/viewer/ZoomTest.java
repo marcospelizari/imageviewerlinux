@@ -2,6 +2,7 @@ package linview.viewer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
@@ -142,5 +143,20 @@ class ZoomTest {
     void sizesMustBePositive() {
         assertThrows(IllegalArgumentException.class, () -> Zoom.scale(Zoom.Mode.FIT, 100, 0, 10, 10, 10));
         assertThrows(IllegalArgumentException.class, () -> Zoom.start(1, 10, 10, 10, Double.NaN));
+    }
+
+    /** #29: what the taskbar's % box accepts; anything else keeps the zoom. */
+    @Test
+    void aTypedPercentIsANumberWithinTheRange() {
+        assertEquals(52, Zoom.parsePercent("52").getAsDouble());
+        assertEquals(52, Zoom.parsePercent(" 52 % ").getAsDouble());
+        assertEquals(52.5, Zoom.parsePercent("52.5%").getAsDouble());
+        assertEquals(52.5, Zoom.parsePercent("52,5").getAsDouble());   // Brazilian keyboards
+        assertEquals(33.3, Zoom.parsePercent("33.333").getAsDouble());
+        assertEquals(1, Zoom.parsePercent("1").getAsDouble());
+        assertEquals(200, Zoom.parsePercent("200").getAsDouble());
+        for (String wrong : new String[] {"", "%", "abc", "0", "0.5", "201", "-5", "5 0", "1e2", "52%%"}) {
+            assertTrue(Zoom.parsePercent(wrong).isEmpty(), wrong);
+        }
     }
 }
