@@ -13,7 +13,6 @@ import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
-import javafx.scene.input.MouseButton;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.Label;
@@ -105,12 +104,9 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
         scene.getStylesheets().add(ViewerWindow.class.getResource("/linview/viewer.css").toExternalForm());
         panels.watch(scene);
         scene.setOnKeyPressed(this::keyPressed);
-        scene.setOnMouseClicked(e -> {
-            // A drag that ends where it started is not a click (R-ZOOM-05).
-            if (e.getButton() == MouseButton.PRIMARY && e.getClickCount() == 2 && e.isStillSincePress()) {
-                execute(Keys.Action.FULL_SCREEN);
-            }
-        });
+        // A double-click toggles full-screen; a click on the image's left / right half goes back / on (#62).
+        viewer.onClicks(() -> execute(Keys.Action.PREVIOUS), () -> execute(Keys.Action.NEXT),
+                () -> execute(Keys.Action.FULL_SCREEN));
 
         stage.setFullScreenExitHint("");
         stage.setFullScreenExitKeyCombination(KeyCombination.NO_MATCH);   // Esc quits, also from full-screen (#26)
