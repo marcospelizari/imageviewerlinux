@@ -12,6 +12,7 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - In full-screen the mouse pointer hides after 2 s without movement and comes back when the mouse moves (#33)
 
 ### Changed
+- Zoom lock is per open, as in FastStone: opening an image or folder (at start or with Ctrl+O) leaves zoom lock and shows it in the mode before the lock (fit by default), so you open a photo, see it fit, and lock that %. Before, the locked % was remembered across restarts and the first photo opened at an old % (Marcos's decision, #59)
 - The window code moved from `App` to `ui.ViewerWindow`: Stage and Scene, the Open dialog, full-screen and what the controller shows. Every action goes through its one entry point `execute(Keys.Action)`, which the taskbar, panels and menu will call too. `App` only builds, connects, starts and stops. No change in behaviour (#53)
 
 ## [0.2.0] - 2026-10-24 - Phase 3
