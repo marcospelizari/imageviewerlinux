@@ -17,8 +17,9 @@ import javafx.scene.image.WritableImage;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.StackPane;
+import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
-import javafx.stage.Window;
+import javafx.stage.Stage;
 import javafx.util.Duration;
 
 import linview.image.ImageResampler;
@@ -41,6 +42,9 @@ import linview.viewer.Zoom;
  * and swapped in, one physical pixel per screen pixel. Any change starts again; a late result for another image or
  * scale is dropped, and a drag keeps the sharp copy. Not for animated GIFs (it would stop them) or images over
  * {@link ImageResampler#MAX_SOURCE_PIXELS}.
+ *
+ * <p>In full-screen the mouse pointer hides after {@link #POINTER_IDLE} without movement and returns when the mouse
+ * moves (R-FS-08, #33).
  */
 public final class ViewerPane extends StackPane {
 
@@ -68,13 +72,17 @@ public final class ViewerPane extends StackPane {
     /** The image is larger than the pane on some side, so a drag moves it. */
     private boolean pannable;
     private boolean dragging;
+
+    static final Duration POINTER_IDLE = Duration.seconds(2);
+    private final PauseTransition idle = new PauseTransition(POINTER_IDLE);
+    private boolean pointerHidden;
+    private boolean fullScreen;
     private double dragX;
     private double dragY;
 
     public ViewerPane() {
-        setStyle("-fx-background-color: black;");
+        setBackgroundColour("#000000");
         view.setSmooth(true);
-        message.setStyle("-fx-text-fill: #d0d0d0; -fx-font-size: 16px;");
         message.setWrapText(true);
         turned.setManaged(false);   // placed by hand; the pane must not centre it or grow to the image's size
         Rectangle clip = new Rectangle();
@@ -89,10 +97,12 @@ public final class ViewerPane extends StackPane {
                 dragging = true;
                 dragX = e.getX();
                 dragY = e.getY();
-                setCursor(Cursor.CLOSED_HAND);
+                updateCursor();
             }
         });
+        setOnMouseMoved(e -> pointerMoved());
         setOnMouseDragged(e -> {
+            pointerMoved();
             if (dragging) {
                 controller.pan((e.getX() - dragX) * scale, (e.getY() - dragY) * scale);
                 dragX = e.getX();
@@ -102,16 +112,30 @@ public final class ViewerPane extends StackPane {
         setOnMouseReleased(e -> {
             if (e.getButton() == MouseButton.PRIMARY && dragging) {
                 dragging = false;
-                setCursor(pannable ? Cursor.OPEN_HAND : Cursor.DEFAULT);
+                updateCursor();
             }
+        });
+        idle.setOnFinished(e -> {
+            pointerHidden = true;
+            updateCursor();
         });
     }
 
     /**
-     * Where the size, the wheel and drags go, and the window whose render scale converts them; set once, before any
-     * image is shown.
+     * The colour around the image and behind its transparent parts (R-FS-06), {@code #rrggbb}; messages are dark on a
+     * light colour.
      */
-    public void connect(ViewerController<Image> controller, Window window) {
+    public void setBackgroundColour(String colour) {
+        setStyle("-fx-background-color: " + colour + ";");
+        boolean light = Color.web(colour).getBrightness() > 0.6;
+        message.setStyle("-fx-text-fill: " + (light ? "#303030" : "#d0d0d0") + "; -fx-font-size: 16px;");
+    }
+
+    /**
+     * Where the size, the wheel and drags go, and the window whose render scale converts them and whose full-screen
+     * hides the idle pointer; set once, before any image is shown.
+     */
+    public void connect(ViewerController<Image> controller, Stage window) {
         this.controller = controller;
         InvalidationListener resized = obs -> {
             scale = window.getRenderScaleX();
@@ -120,6 +144,21 @@ public final class ViewerPane extends StackPane {
         widthProperty().addListener(resized);
         heightProperty().addListener(resized);
         window.renderScaleXProperty().addListener(resized);
+        window.fullScreenProperty().addListener((obs, was, now) -> {
+            fullScreen = now;
+            pointerMoved();   // entering: hides after a while; leaving: shown, and stays
+        });
+    }
+
+    /** The pointer shows again; in full-screen it hides once the mouse rests for {@link #POINTER_IDLE}. */
+    private void pointerMoved() {
+        pointerHidden = false;
+        updateCursor();
+        if (fullScreen) {
+            idle.playFromStart();
+        } else {
+            idle.stop();
+        }
     }
 
     /** Turns the wheel's pixels into notches; Ctrl + wheel zooms at the mouse, the plain wheel follows the setting. */
@@ -243,11 +282,14 @@ public final class ViewerPane extends StackPane {
         return url != null && url.toLowerCase(Locale.ROOT).endsWith(".gif");
     }
 
-    /** Grab hand while there is something to drag; the closed hand stays until the drag ends. */
     private void setPannable(boolean value) {
         pannable = value;
-        if (!dragging) {
-            setCursor(pannable ? Cursor.OPEN_HAND : Cursor.DEFAULT);
-        }
+        updateCursor();
+    }
+
+    /** Hidden while idle in full-screen; else the closed hand while dragging, the grab hand when it can be dragged. */
+    private void updateCursor() {
+        setCursor(pointerHidden ? Cursor.NONE
+                : dragging ? Cursor.CLOSED_HAND : pannable ? Cursor.OPEN_HAND : Cursor.DEFAULT);
     }
 }

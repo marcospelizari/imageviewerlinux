@@ -13,6 +13,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import linview.image.Loaded;
+import linview.settings.Settings;
 import linview.viewer.ImageList;
 import linview.viewer.ViewerController;
 import linview.viewer.Zoom;
@@ -39,10 +40,14 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
         return "/linview/icons/linview-" + size + ".png";
     }
 
-    /** Builds the scene for {@code controller}, which is shown to, and opens the window on the mouse's monitor. */
-    public void show(ViewerController<Image> controller) {
+    /**
+     * Builds the scene for {@code controller}, which is shown to, with the background colour of {@code settings}, and
+     * opens the window on the mouse's monitor.
+     */
+    public void show(ViewerController<Image> controller, Settings settings) {
         this.controller = controller;
         viewer.connect(controller, stage);
+        viewer.setBackgroundColour(settings.backgroundColour());
 
         Scene scene = new Scene(viewer, 1024, 700);
         scene.setOnKeyPressed(this::keyPressed);

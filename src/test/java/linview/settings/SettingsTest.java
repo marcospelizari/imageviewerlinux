@@ -42,6 +42,20 @@ class SettingsTest {
         assertEquals("#a0b1c2", s.background());
     }
 
+    /** #31: what the window paints; black by default. */
+    @Test
+    void backgroundColourIsHexForPresetsAndOwnColours() {
+        assertEquals("#000000", s.backgroundColour());
+        s.setBackground("darkgrey");
+        assertEquals("#333333", s.backgroundColour());
+        s.setBackground("grey");
+        assertEquals("#808080", s.backgroundColour());
+        s.setBackground("WHITE");
+        assertEquals("#ffffff", s.backgroundColour());
+        s.setBackground("#A0B1C2");
+        assertEquals("#a0b1c2", s.backgroundColour());
+    }
+
     @Test
     void windowPositionIsBothOrNeither() {
         s.setWindowPosition(10.0, 20.0);

@@ -86,7 +86,7 @@ public class App extends Application {
         };
         ViewerWindow window = new ViewerWindow(stage);
         controller = new ViewerController<>(settings, store, source, window, timing, folders, Platform::runLater);
-        window.show(controller);
+        window.show(controller, settings);
 
         if (args.isEmpty()) {
             controller.showOpenHintIfEmpty();

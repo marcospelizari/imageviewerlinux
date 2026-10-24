@@ -19,7 +19,7 @@ A fast image viewer for Linux, inspired by FastStone Image Viewer.
 - The next images are loaded in the background and recently seen ones kept (up to 300 MB), so they show at once. Very large images are decoded only as large as needed; one too large for memory shows a message
 - R / L turn the image on screen 90° right / left; the file is not changed, and the next image opens upright again
 - Window title shows the file name, its position in the folder, the image size and the zoom %
-- The window opens on the monitor under the mouse pointer; Enter toggles full-screen
+- The window opens on the monitor under the mouse pointer; Enter toggles full-screen, where the mouse pointer hides after 2 s without movement
 
 ## Roadmap
 | Version | Contents |
@@ -94,7 +94,7 @@ Edit it while linview is closed. Most settings are used by features that are sti
 | `zoom.mode` | `fit`, `width`, `height`, `actual`, `lock` | `fit` |
 | `zoom.percent` | zoom % used by `lock`, 1–200 | `100` |
 | `wheel` | `scroll` (wheel scrolls the image, stops at its edges) / `navigate` (wheel down = next image, up = previous) | `scroll` |
-| `background` | `black`, `darkgrey`, `grey`, `white` or `#RRGGBB` | `black` |
+| `background` | `black`, `darkgrey` (#333333), `grey` (#808080), `white` or `#RRGGBB`: around the image and behind its transparent parts | `black` |
 | `overlay.fileName` | `true` / `false`: file name in full-screen | `true` |
 | `start.fullScreen` | `true` / `false`: start in full-screen (last-used mode) | `false` |
 | `window.x`, `window.y` | window position; empty = the monitor under the mouse pointer | empty |
