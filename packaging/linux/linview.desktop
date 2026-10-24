@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=linview
+GenericName=Image Viewer
+Comment=Fast image viewer inspired by FastStone
+Exec="@EXEC@" %f
+Icon=linview
+Terminal=false
+Categories=Graphics;Viewer;2DGraphics;RasterGraphics;
+MimeType=image/jpeg;image/png;image/gif;image/bmp;image/x-bmp;image/x-ms-bmp;image/webp;image/tiff;image/vnd.adobe.photoshop;image/x-psd;image/x-tga;image/x-targa;
+Keywords=photo;picture;image;viewer;
+StartupWMClass=linview.App
