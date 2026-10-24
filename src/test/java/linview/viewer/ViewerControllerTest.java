@@ -637,6 +637,21 @@ class ViewerControllerTest {
         assertNull(shownImage);
     }
 
+    /** #26: closing remembers the mode and the window; a window smaller than allowed is saved at the minimum. */
+    @Test
+    void closingRemembersTheModeAndTheWindow() throws IOException {
+        controller.windowClosed(true, 1920 + 200, 100.5, 1400, 150);
+        store.flush();
+
+        String saved = Files.readString(settingsFile);
+        assertTrue(saved.contains("start.fullScreen=true"), saved);
+        assertTrue(saved.contains("window.x=2120"), saved);
+        assertTrue(saved.contains("window.y=100.5"), saved);
+        assertTrue(saved.contains("window.width=1400"), saved);
+        assertTrue(saved.contains("window.height=200"), saved);
+        assertTrue(warnings.isEmpty(), warnings.toString());
+    }
+
     @Test
     void aNewZoomModeAppliesAndIsSaved() throws IOException {
         controller.open(folder);
