@@ -33,7 +33,7 @@ class TimingLogTest {
         for (long millis : new long[] {30, 10, 20}) {
             long start = now[0];
             now[0] += millis * 1_000_000;
-            log.shown("img.jpg", start, 0);
+            log.shown("img.jpg", start, 0, false);
         }
         lines.clear();
 
@@ -44,9 +44,23 @@ class TimingLogTest {
         assertTrue(lines.get(1).endsWith(" MB"), lines.get(1));
     }
 
+    /** #20: each line says whether the image came from the cache. */
+    @Test
+    void eachLineSaysWhetherTheImageCameFromTheCache() {
+        List<String> lines = new ArrayList<>();
+        long[] now = {0};
+        TimingLog log = new TimingLog(lines::add, () -> now[0]);
+        now[0] = 2_000_000;
+        log.shown("a.jpg", 0, 0, true);
+        log.shown("b.jpg", 0, 281.4, false);
+
+        assertEquals("timing  a.jpg  shown 2.0 ms  load 0.0 ms  cache yes", lines.get(0));
+        assertEquals("timing  b.jpg  shown 2.0 ms  load 281.4 ms  cache no", lines.get(1));
+    }
+
     @Test
     void offLogsNothing() {
-        TimingLog.OFF.shown("img.jpg", TimingLog.OFF.now(), 1);
+        TimingLog.OFF.shown("img.jpg", TimingLog.OFF.now(), 1, false);
         TimingLog.OFF.failed("img.jpg", TimingLog.OFF.now());
         TimingLog.OFF.summary();   // no output stream, no exception
     }

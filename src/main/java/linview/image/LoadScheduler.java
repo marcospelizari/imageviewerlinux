@@ -1,17 +1,20 @@
 package linview.image;
 
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
- * Which image loads when (#21): the selected image first, then the preloads one at a time, and the window of kept
- * images: the current image plus the wanted ones, anything else dropped. The selected image never waits for a
+ * Which image loads when (#21): the selected image first, then the preloads one at a time, and the cache of kept
+ * images (#20): up to a budget of decoded pixels (W×H×4), least recently used dropped first, but never the current
+ * image, and images still wanted only after all others, least wanted first. Preloading pauses while the current and
+ * wanted images fill the budget. The selected image never waits for a
  * preload: none starts while it loads, and one already running goes on beside it rather than in front of it; when
  * the selected image is the one being preloaded it takes that load over. A running preload is cancelled only when
  * its image is no longer wanted: JavaFX can't stop a decode it has started, so cancelling one still wanted would
@@ -68,8 +71,10 @@ final class LoadScheduler<I> {
     }
 
     private final Decoder<I> decoder;
+    private final long budgetBytes;
 
-    private final Map<Path, Kept<I>> kept = new HashMap<>();
+    /** In access order: least recently used first. */
+    private final Map<Path, Kept<I>> kept = new LinkedHashMap<>(16, 0.75f, true);
     /** Wanted images whose preload came back too large to keep: not tried again until they leave the window (#57). */
     private final Set<Path> rejected = new HashSet<>();
     private Path current;
@@ -84,8 +89,10 @@ final class LoadScheduler<I> {
     /** The selection waiting for the preload of the same image. */
     private Request takeOver;
 
-    LoadScheduler(Decoder<I> decoder) {
+    /** {@code budgetBytes}: how much decoded image the cache may hold (#20). */
+    LoadScheduler(Decoder<I> decoder, long budgetBytes) {
         this.decoder = decoder;
+        this.budgetBytes = budgetBytes;
     }
 
     /** See {@link ImageLoader#load}; a load still being served for an earlier selection is cancelled. */
@@ -105,7 +112,7 @@ final class LoadScheduler<I> {
                     return;
                 }
                 if (state != null && state.equals(ready.stamp()) && kept.get(file) == ready) {
-                    answer(request, ready.image().timed(0));
+                    answer(request, ready.image().fromCache());
                 } else {
                     kept.remove(file);
                     decodeSelected(request);
@@ -121,14 +128,13 @@ final class LoadScheduler<I> {
 
     /**
      * The images likely to come next, most wanted first, each with {@code minResolution} as far as the decoder's cap
-     * allows. Kept images no longer wanted are dropped; the others are loaded one at a time once the selected image is
-     * ready. An empty list stops preloading.
+     * allows; those not kept yet are loaded one at a time once the selected image is ready. Kept images no longer
+     * wanted stay until the budget needs their room. An empty list stops preloading.
      * Called after each {@link #load}, which is what starts preloading.
      */
     void preload(List<Path> files, double minResolution) {
         wanted = List.copyOf(files);
         wantedResolution = minResolution;
-        kept.keySet().removeIf(file -> !file.equals(current) && !wanted.contains(file));
         rejected.retainAll(wanted);
         if (preloading != null && !wanted.contains(preloading) && takeOver == null) {
             stopPreload();
@@ -139,6 +145,31 @@ final class LoadScheduler<I> {
     /** How many images are kept, for tests. */
     int keptCount() {
         return kept.size();
+    }
+
+    /** What the kept images take, W×H×4 of their decoded pixels; a failure takes nothing. */
+    long keptBytes() {
+        return bytes(file -> true);
+    }
+
+    /** By iterating: {@code kept.get} would count as a use and change the order. */
+    private long bytes(Predicate<Path> which) {
+        long sum = 0;
+        for (Map.Entry<Path, Kept<I>> entry : kept.entrySet()) {
+            if (which.test(entry.getKey())) {
+                sum += decodedBytes(entry.getValue().image());
+            }
+        }
+        return sum;
+    }
+
+    static long decodedBytes(Loaded<?> image) {
+        if (image.isFailed()) {
+            return 0;
+        }
+        double w = Math.ceil(image.width() * image.resolution());
+        double h = Math.ceil(image.height() * image.resolution());
+        return (long) (w * h * 4);
     }
 
     private void decodeSelected(Request request) {
@@ -161,7 +192,8 @@ final class LoadScheduler<I> {
 
     /**
      * Keeps a result while its image is current or wanted, a failure too, so it isn't retried; but nothing decoded
-     * larger than {@link ImageLoader#SHRINK_ABOVE_PIXELS}, e.g. the full image of a huge one for a zoom (#22, #55).
+     * larger than {@link ImageLoader#SHRINK_ABOVE_PIXELS}, e.g. the full image of a huge one for a zoom (#22, #55),
+     * then trims the cache to its budget, which may drop this result again.
      *
      * @return whether it was kept
      */
@@ -169,14 +201,44 @@ final class LoadScheduler<I> {
         double decoded = result.width() * result.height() * result.resolution() * result.resolution();
         if ((file.equals(current) || wanted.contains(file)) && decoded <= ImageLoader.SHRINK_ABOVE_PIXELS) {
             kept.put(file, new Kept<>(result, state));
-            return true;
+            trim();
+            return kept.containsKey(file);
         }
         return false;
     }
 
-    /** Starts the most wanted image not kept yet, unless the selected image or another preload is loading. */
+    /** Drops images until the cache is within its budget: see the class comment for the order. */
+    private void trim() {
+        while (keptBytes() > budgetBytes) {
+            Path drop = null;
+            for (Path file : kept.keySet()) {   // least recently used first
+                if (!file.equals(current) && !wanted.contains(file)) {
+                    drop = file;
+                    break;
+                }
+            }
+            for (int i = wanted.size() - 1; drop == null && i >= 0; i--) {
+                Path file = wanted.get(i);
+                if (!file.equals(current) && kept.containsKey(file)) {
+                    drop = file;
+                }
+            }
+            if (drop == null) {
+                return;   // only the current image is left: it stays, however large
+            }
+            kept.remove(drop);
+        }
+    }
+
+    /**
+     * Starts the most wanted image not kept yet, unless the selected image or another preload is loading, or the
+     * current and wanted images already fill the budget.
+     */
     private void preloadNext() {
         if (selected != null || preloading != null) {
+            return;
+        }
+        if (bytes(file -> file.equals(current) || wanted.contains(file)) >= budgetBytes) {
             return;
         }
         for (Path file : wanted) {
@@ -198,13 +260,15 @@ final class LoadScheduler<I> {
             finished[0] = true;
             preloading = null;
             cancelPreload = () -> { };
-            if (!keep(file, result, state) && wanted.contains(file)) {
+            // Too large to preload (#20) is not kept: selected, the image may still load.
+            boolean keptIt = !result.isTooLarge() && keep(file, result, state);
+            if (!keptIt && wanted.contains(file)) {
                 rejected.add(file);   // else it would be decoded again and again
             }
             Request waiting = takeOver;
             takeOver = null;
             if (waiting != null && !waiting.cancelled && file.equals(current)) {
-                if (result.isFailed() || result.resolution() >= waiting.minResolution) {
+                if (!result.isTooLarge() && (result.isFailed() || result.resolution() >= waiting.minResolution)) {
                     answer(waiting, result);
                 } else {
                     decodeSelected(waiting);   // the screen copy isn't enough for this zoom

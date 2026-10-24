@@ -1,6 +1,7 @@
 package linview.image;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -59,5 +60,28 @@ class LoadedTest {
         assertEquals(copy.orientation(), swapped.orientation());
         assertEquals(6000, swapped.width());
         assertEquals(80, swapped.loadMillis());
+    }
+
+    /** #20: too large is a failure that keeps the real size, for the message. */
+    @Test
+    void tooLargeIsAFailureWithItsSize() {
+        Loaded<String> large = Loaded.tooLarge(29437, 10751);
+        assertTrue(large.isFailed());
+        assertTrue(large.isTooLarge());
+        assertEquals(316, large.megapixels());
+        assertFalse(Loaded.failed().isTooLarge());
+        assertFalse(new Loaded<>("img", 800, 600, Orientation.UPRIGHT).isTooLarge());
+    }
+
+    /** #20: from the cache: no load time, and the flag survives a rotation or a full image. */
+    @Test
+    void fromCacheIsMarkedAndKept() {
+        Loaded<String> cached = new Loaded<>("img", 800, 600, Orientation.UPRIGHT, 1, 280).fromCache();
+        assertTrue(cached.cached());
+        assertEquals(0, cached.loadMillis());
+        assertTrue(cached.rotated(1).cached());
+        assertTrue(cached.withImage(new Loaded<>("full", 800, 600, Orientation.UPRIGHT)).cached());
+        assertFalse(new Loaded<>("img", 800, 600, Orientation.UPRIGHT).cached());
+        assertTrue(Loaded.<String>failed().fromCache().isFailed());
     }
 }

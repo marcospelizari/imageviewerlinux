@@ -373,7 +373,7 @@ class ViewerControllerTest {
         controller.zoomIn();
         controller.rotateRight();
 
-        assertEquals(List.of("timing  a.jpg  shown 120.0 ms  load 100.0 ms"), timingLines);
+        assertEquals(List.of("timing  a.jpg  shown 120.0 ms  load 100.0 ms  cache no"), timingLines);
     }
 
     @Test
@@ -388,7 +388,7 @@ class ViewerControllerTest {
 
         lastLoad().finish(800, 600);
 
-        assertEquals(List.of("timing  b.jpg  shown 30.0 ms  load 0.0 ms"), timingLines);
+        assertEquals(List.of("timing  b.jpg  shown 30.0 ms  load 0.0 ms  cache no"), timingLines);
     }
 
     @Test
@@ -495,6 +495,17 @@ class ViewerControllerTest {
         controller.first();
         controller.previous();
         assertEquals(count + 1, loads.size());
+    }
+
+    /** #20: an image that needs too much memory says so, not "damaged". */
+    @Test
+    void anImageTooLargeToLoadSaysSo() {
+        controller.open(folder);
+        lastLoad().done().accept(Loaded.tooLarge(29437, 10751));
+        assertEquals("Can't show a.jpg: the image is too large (316 MP)", message);
+        controller.next();
+        lastLoad().finish(800, 600);
+        assertEquals("b.jpg", shownImage);
     }
 
     @Test

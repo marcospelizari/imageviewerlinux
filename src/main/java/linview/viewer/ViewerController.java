@@ -442,7 +442,9 @@ public final class ViewerController<I> {
             timing.failed(file.getFileName().toString(), requestStart);
             shown = null;
             view = null;
-            display.showMessage("Can't show " + file.getFileName() + ": the file is damaged or not a supported image");
+            display.showMessage(result.isTooLarge()
+                    ? "Can't show " + file.getFileName() + ": the image is too large (" + result.megapixels() + " MP)"
+                    : "Can't show " + file.getFileName() + ": the file is damaged or not a supported image");
             return;
         }
         shown = result;
@@ -503,7 +505,7 @@ public final class ViewerController<I> {
                     shown.uprightWidth(), shown.uprightHeight(), v.scale(), settings.zoomMode() == Zoom.Mode.LOCK));
             if (timingPending) {
                 timingPending = false;
-                timing.shown(file.getFileName().toString(), requestStart, shown.loadMillis());
+                timing.shown(file.getFileName().toString(), requestStart, shown.loadMillis(), shown.cached());
             }
             loadFullIfNeeded(file, v);
         }

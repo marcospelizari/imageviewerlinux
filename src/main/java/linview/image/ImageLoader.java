@@ -15,6 +15,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -40,8 +41,13 @@ import javafx.scene.image.WritableImage;
  * waits for a preload: none starts while it loads, and one running goes on beside it on its own thread; it is
  * cancelled only when no longer wanted. A kept image is used only while its file still has the same modified time and
  * size (R4), checked on the worker thread. Preloads ask for what the zoom mode needs, but never more than 40 MP
- * decoded, so huge neighbours stay bounded (#55). #20 replaces the window by a cache with a memory budget. All public
- * methods are called on the JavaFX thread.
+ * decoded, so huge neighbours stay bounded (#55). Kept images are a cache of {@link #CACHE_BUDGET_BYTES} (#20).
+ *
+ * <p>Decode memory (#20): what a decode needs is estimated from the header before it starts ({@link #decodeBytes}).
+ * Above {@link #PRELOAD_DECODE_LIMIT} an image is not preloaded and its decode runs on a thread of its own, one at a
+ * time: JavaFX can't stop a decode it has started, so this is what bounds them, and normal images never wait behind
+ * one. Above {@link #DECODE_LIMIT} it is refused as {@link Loaded#tooLarge too large}, and so is a decode that runs
+ * out of memory anyway. All public methods are called on the JavaFX thread.
  */
 public final class ImageLoader {
 
@@ -54,6 +60,21 @@ public final class ImageLoader {
      * 2026-10-24, REPORT.md §5.2). Larger images are shrunk, which is faster and keeps memory low.
      */
     static final double SHRINK_ABOVE_PIXELS = 40e6;
+
+    /** How much decoded image the cache keeps, W×H×4 (decided 2026-10-24, REPORT.md §5.2). */
+    static final long CACHE_BUDGET_BYTES = 300L << 20;
+
+    /** A decode needing more than this (≈ 100 MP JPEG) is not preloaded and runs one at a time (Marcos, #20). */
+    static final long PRELOAD_DECODE_LIMIT = 300L << 20;
+
+    /**
+     * A decode needing more than this is refused: the 2 GB heap ({@code -Xmx2g}) less the cache and a preload
+     * (Marcos, #20).
+     */
+    static final long DECODE_LIMIT = 1200L << 20;
+
+    /** The ImageIO path briefly holds the decoded image, its ARGB array and the JavaFX image (REPORT.md §6.8). */
+    private static final int IMAGEIO_BYTES_PER_PIXEL = 12;
 
     private static final System.Logger LOG = System.getLogger("linview");
 
@@ -75,6 +96,8 @@ public final class ImageLoader {
     /** Decodes the selected image; preloads have their own thread, so they never queue in front of it. */
     private final ExecutorService worker = daemonThread("linview-decoder");
     private final ExecutorService preloader = daemonThread("linview-preloader");
+    /** Decodes above {@link #PRELOAD_DECODE_LIMIT}, one at a time. */
+    private final ExecutorService large = daemonThread("linview-large-decoder");
 
     /** Which image loads when, and the window of kept images (#21). */
     private final LoadScheduler<Image> scheduler = new LoadScheduler<>(new LoadScheduler.Decoder<>() {
@@ -88,7 +111,7 @@ public final class ImageLoader {
         public Runnable stamp(Path file, Consumer<Object> done) {
             return stampOn(worker, file, done);
         }
-    });
+    }, CACHE_BUDGET_BYTES);
 
     /** {@code screenWidth} × {@code screenHeight}: the largest screen, in physical pixels. */
     public ImageLoader(double screenWidth, double screenHeight) {
@@ -154,53 +177,123 @@ public final class ImageLoader {
         String extension = extension(file);
         AtomicBoolean cancelled = new AtomicBoolean();
         Runnable[] cancelJavaFX = {() -> { }};   // only touched on the JavaFX thread
-        Future<?> task = lane.submit(() -> {
-            try {
-                decodeSteps(file, extension, minResolution, preload, start, cancelled, cancelJavaFX, done);
-            } catch (Throwable e) {
-                // Never leave a load unanswered: an unexpected error (a native library failing, say) would otherwise
-                // vanish inside the Future and the image would stay "loading" for ever.
-                LOG.log(System.Logger.Level.WARNING, "Can't load " + file, e);
-                Platform.runLater(() -> {
-                    if (!cancelled.get()) {
-                        done.accept(Loaded.failed(), null);
-                    }
-                });
-            }
-        });
+        AtomicReference<Future<?>> task = new AtomicReference<>();   // the large lane's, once moved there
+        Future<?> first = lane.submit(guarded(file, cancelled, done,
+                () -> decodeSteps(file, extension, minResolution, preload, start, cancelled, cancelJavaFX, task,
+                        done)));
+        task.compareAndSet(null, first);   // unless the steps already moved to the large lane
         return () -> {
             cancelled.set(true);
-            task.cancel(true);   // a load not started yet never runs; a running ImageIO decode is interrupted
+            // A load not started yet never runs; a running ImageIO decode is interrupted. A large JavaFX one goes on
+            // to the end (it can't be stopped), so only one runs at a time, and its result is dropped.
+            task.get().cancel(true);
             cancelJavaFX[0].run();
         };
     }
 
-    /** The worker-thread part of {@link #decodeOn}: file state, EXIF, size, then the decode or JavaFX's load. */
-    private void decodeSteps(Path file, String extension, double minResolution, boolean preload, long start,
-                             AtomicBoolean cancelled,
-                             Runnable[] cancelJavaFX, BiConsumer<Loaded<Image>, Object> done) {
-        {
-            Stamp stamp = Stamp.of(file);
-            ImageHeader header = ImageHeader.read(file);
-            Orientation orientation = header.orientation();
-            if (IMAGEIO_EXTENSIONS.contains(extension)) {
-                Loaded<Image> result = decode(file, extension, orientation, minResolution, preload)
-                        .timed(millisSince(start));
-                Platform.runLater(() -> {
-                    if (!cancelled.get()) {
-                        done.accept(result, stamp);
-                    }
-                });
-            } else {
-                double scale = header.hasSize()
-                        ? decodeScale(header.width(), header.height(), orientation, minResolution, preload) : 1;
-                Platform.runLater(() -> {
-                    if (!cancelled.get()) {
-                        cancelJavaFX[0] = loadWithJavaFX(file, header, scale, preload, start,
-                                result -> done.accept(result, stamp));
-                    }
-                });
+    /**
+     * Never leaves a load unanswered: an unexpected error (a native library failing, say) would otherwise vanish inside
+     * the Future and the image would stay "loading" for ever.
+     */
+    private static Runnable guarded(Path file, AtomicBoolean cancelled, BiConsumer<Loaded<Image>, Object> done,
+                                    Runnable steps) {
+        return () -> {
+            try {
+                steps.run();
+            } catch (Throwable e) {
+                LOG.log(System.Logger.Level.WARNING, "Can't load " + file, e);
+                answer(cancelled, done, Loaded.failed(), null);
             }
+        };
+    }
+
+    private static void answer(AtomicBoolean cancelled, BiConsumer<Loaded<Image>, Object> done, Loaded<Image> result,
+                               Object stamp) {
+        Platform.runLater(() -> {
+            if (!cancelled.get()) {
+                done.accept(result, stamp);
+            }
+        });
+    }
+
+    /**
+     * The worker-thread part of {@link #decodeOn}: file state, EXIF, size, the decode-memory check (#20), then the
+     * decode or JavaFX's load; a large decode moves to its own lane.
+     */
+    private void decodeSteps(Path file, String extension, double minResolution, boolean preload, long start,
+                             AtomicBoolean cancelled, Runnable[] cancelJavaFX, AtomicReference<Future<?>> task,
+                             BiConsumer<Loaded<Image>, Object> done) {
+        Stamp stamp = Stamp.of(file);
+        ImageHeader header = ImageHeader.read(file);
+        boolean imageIO = IMAGEIO_EXTENSIONS.contains(extension);
+        if (imageIO) {   // metadata-extractor gives no size for these; the reader does, without decoding
+            double[] size = imageIOSize(file, extension);
+            header = new ImageHeader(header.orientation(), size[0], size[1]);
+        }
+        ImageHeader known = header;
+        Orientation orientation = header.orientation();
+        long need = header.hasSize() ? decodeBytes(extension, header.width(), header.height(),
+                decodeScale(header.width(), header.height(), orientation, minResolution, preload), preload) : 0;
+        if (need > DECODE_LIMIT || preload && need > PRELOAD_DECODE_LIMIT) {
+            answer(cancelled, done, Loaded.tooLarge(header.width(), header.height()), stamp);
+            return;
+        }
+        if (need > PRELOAD_DECODE_LIMIT) {
+            Runnable decodeLarge = imageIO
+                    ? () -> answer(cancelled, done,
+                            decode(file, extension, orientation, minResolution, false).timed(millisSince(start)), stamp)
+                    : () -> answer(cancelled, done, loadLargeWithJavaFX(file, known, minResolution, start), stamp);
+            Future<?> queued = large.submit(guarded(file, cancelled, done, decodeLarge));
+            task.set(queued);
+            if (cancelled.get()) {
+                queued.cancel(true);   // cancelled while moving: it may not have seen this future
+            }
+        } else if (imageIO) {
+            answer(cancelled, done, decode(file, extension, orientation, minResolution, preload)
+                    .timed(millisSince(start)), stamp);
+        } else {
+            double scale = header.hasSize()
+                    ? decodeScale(header.width(), header.height(), orientation, minResolution, preload) : 1;
+            Platform.runLater(() -> {
+                if (!cancelled.get()) {
+                    cancelJavaFX[0] = loadWithJavaFX(file, known, scale, preload, start,
+                            result -> done.accept(result, stamp));
+                }
+            });
+        }
+    }
+
+    /**
+     * What decoding a {@code width} × {@code height} image (as stored) at {@code scale} needs (#20). JavaFX decodes
+     * a JPEG, PNG, GIF or BMP at full size whatever size is asked for (GC log, 2026-10-24): 3 bytes per pixel for a
+     * JPEG, 4 for the others. ImageIO decodes every n-th pixel, then holds three copies.
+     */
+    static long decodeBytes(String extension, double width, double height, double scale, boolean preload) {
+        if (IMAGEIO_EXTENSIONS.contains(extension)) {
+            int step = subsampling(scale, width, height, preload);
+            return (long) (Math.ceil(width / step) * Math.ceil(height / step) * IMAGEIO_BYTES_PER_PIXEL);
+        }
+        int bytesPerPixel = extension.equals("jpg") || extension.equals("jpeg") ? 3 : 4;
+        return (long) (width * height * bytesPerPixel);
+    }
+
+    /** The stored size from the ImageIO reader's header, without decoding; 0 × 0 when it can't be read. */
+    private static double[] imageIOSize(Path file, String extension) {
+        Iterator<ImageReader> readers = ImageIO.getImageReadersBySuffix(extension);
+        if (!readers.hasNext()) {
+            return new double[] {0, 0};
+        }
+        ImageReader reader = readers.next();
+        try (ImageInputStream in = ImageIO.createImageInputStream(file.toFile())) {
+            if (in == null) {
+                return new double[] {0, 0};
+            }
+            reader.setInput(in);
+            return new double[] {reader.getWidth(0), reader.getHeight(0)};
+        } catch (IOException | RuntimeException e) {
+            return new double[] {0, 0};   // the decode will fail and say so
+        } finally {
+            reader.dispose();
         }
     }
 
@@ -208,6 +301,7 @@ public final class ImageLoader {
     public void close() {
         worker.shutdownNow();
         preloader.shutdownNow();
+        large.shutdownNow();
     }
 
     static String extension(Path file) {
@@ -324,7 +418,7 @@ public final class ImageLoader {
                 if (!(image.getException() instanceof CancellationException)) {   // cancelling is reported as an error
                     LOG.log(System.Logger.Level.WARNING, "Can't load " + file + ": " + reason(image.getException()));
                 }
-                done.accept(Loaded.failed());
+                done.accept(failure(image.getException(), header));
             } else if (image.getProgress() >= 1 && image.getWidth() > 0) {
                 reported[0] = true;
                 double width = header.hasSize() ? header.width() : image.getWidth();
@@ -340,6 +434,34 @@ public final class ImageLoader {
         return image::cancel;
     }
 
+    /** Out of memory is "too large", not "damaged" (#20); the size is the header's. */
+    static Loaded<Image> failure(Throwable error, ImageHeader header) {
+        Throwable cause = error;
+        while (cause != null && !(cause instanceof OutOfMemoryError) && cause.getCause() != cause) {
+            cause = cause.getCause();
+        }
+        return cause instanceof OutOfMemoryError && header.hasSize()
+                ? Loaded.tooLarge(header.width(), header.height()) : Loaded.failed();
+    }
+
+    /**
+     * On the large lane: JavaFX's load without background loading, so it runs on this thread and the next large one
+     * starts only after it (#20).
+     */
+    private Loaded<Image> loadLargeWithJavaFX(Path file, ImageHeader header, double minResolution, long start) {
+        double scale = decodeScale(header.width(), header.height(), header.orientation(), minResolution, false);
+        String url = file.toUri().toString();
+        double[] size = scale < 1 ? requestedSize(header.width(), header.height(), scale, false) : null;
+        Image image = size != null ? new Image(url, size[0], size[1], true, true, false) : new Image(url, false);
+        if (image.isError() || image.getWidth() <= 0) {
+            LOG.log(System.Logger.Level.WARNING, "Can't load " + file + ": " + reason(image.getException()));
+            return failure(image.getException(), header);
+        }
+        double resolution = Math.min(1, image.getWidth() / header.width());
+        return new Loaded<>(image, header.width(), header.height(), header.orientation(), resolution,
+                millisSince(start));
+    }
+
     /**
      * The first image in the file (page 1 of a TIFF, frame 1 of an animated WebP), every n-th pixel when that still
      * covers the screen and {@code minResolution}. The reader is chosen by extension, since TGA has no signature to
@@ -347,6 +469,8 @@ public final class ImageLoader {
      */
     private Loaded<Image> decode(Path file, String extension, Orientation orientation, double minResolution,
                                  boolean preload) {
+        double width = 0;
+        double height = 0;
         try {
             Iterator<ImageReader> readers = ImageIO.getImageReadersBySuffix(extension);
             if (!readers.hasNext()) {
@@ -354,8 +478,6 @@ public final class ImageLoader {
             }
             ImageReader reader = readers.next();
             BufferedImage decoded;
-            double width;
-            double height;
             try (ImageInputStream in = ImageIO.createImageInputStream(file.toFile())) {
                 if (in == null) {
                     return Loaded.failed();
@@ -375,10 +497,11 @@ public final class ImageLoader {
             }
             double resolution = Math.min(1, decoded.getWidth() / width);
             return new Loaded<>(toFxImage(decoded), width, height, orientation, resolution, 0);
-        } catch (IOException | RuntimeException | OutOfMemoryError e) {
-            // Damaged, unsupported or too large: a message, never a hang. The large arrays are gone by now,
-            // so an out-of-memory here is recoverable.
-            return Loaded.failed();
+        } catch (OutOfMemoryError e) {
+            // The large arrays are gone by now, so this is recoverable: "too large", not "damaged" (#20).
+            return width > 0 && height > 0 ? Loaded.tooLarge(width, height) : Loaded.failed();
+        } catch (IOException | RuntimeException e) {
+            return Loaded.failed();   // damaged or unsupported: a message, never a hang
         }
     }
 
