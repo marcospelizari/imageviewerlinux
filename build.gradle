@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'linview'
-version = '0.0.1'
+version = '0.1.0'
 
 java {
     toolchain {
@@ -41,4 +41,45 @@ application {
 
 tasks.named('test') {
     useJUnitPlatform()
+}
+
+// Packaged app with its own Java runtime and JavaFX (#54): build/jpackage/linview/bin/linview starts without
+// Gradle or an installed JDK. JavaFX goes into that runtime (module path), which is what the installDist start
+// script lacks. An app image only; the .desktop file and the installer come with #37.
+def javafxJars = configurations.runtimeClasspath.filter { it.name.startsWith('javafx-') }
+
+def appImageInput = tasks.register('appImageInput', Sync) {
+    from tasks.named('jar')
+    from configurations.runtimeClasspath.filter { !it.name.startsWith('javafx-') }
+    into layout.buildDirectory.dir('jpackage-input')
+}
+
+def appImageClean = tasks.register('appImageClean', Delete) {
+    delete layout.buildDirectory.dir('jpackage')   // jpackage refuses to write over an existing image
+}
+
+tasks.register('appImage', Exec) {
+    group = 'distribution'
+    description = 'Builds build/jpackage/linview, a jpackage app image with a bundled Java runtime and JavaFX.'
+    dependsOn appImageInput, appImageClean
+    executable = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(21) }
+            .get().metadata.installationPath.file('bin/jpackage').asFile
+    def input = layout.buildDirectory.dir('jpackage-input')
+    def output = layout.buildDirectory.dir('jpackage')
+    def mainJar = tasks.named('jar').flatMap { it.archiveFileName }
+    def mainClass = application.mainClass
+    def appVersion = version.toString()
+    def javaOptions = application.applicationDefaultJvmArgs.join(' ')
+    def icon = file('src/main/resources/linview/icons/linview-256.png')
+    // Worked out when the task runs, without touching the project (Gradle 10 forbids that).
+    argumentProviders.add({
+        ['--type', 'app-image', '--name', 'linview', '--app-version', appVersion,
+         '--dest', output.get().asFile.path, '--input', input.get().asFile.path,
+         '--main-jar', mainJar.get(), '--main-class', mainClass.get(),
+         '--module-path', javafxJars.asPath,
+         // From jdeps --print-module-deps over the app and its libraries; update it with new dependencies.
+         '--add-modules', 'java.base,java.desktop,java.management,java.sql,javafx.controls',
+         '--java-options', javaOptions,
+         '--icon', icon.path]
+    } as CommandLineArgumentProvider)
 }

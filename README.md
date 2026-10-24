@@ -39,6 +39,17 @@ Requires Linux and Java 21. The Gradle wrapper downloads everything else.
 
 Use an absolute path with `--args`: Gradle runs the app from the project folder.
 
+To run linview without Gradle or an installed Java, build the packaged app (about 100 MB, with its own Java runtime
+and JavaFX) and start it from `build/jpackage/linview/bin/`:
+
+```sh
+./gradlew appImage
+build/jpackage/linview/bin/linview "$HOME/Pictures/photo.jpg"
+```
+
+An installer and "Open with linview" in file managers come later. (`./gradlew installDist` does not give a working
+start script: use `appImage`.)
+
 To measure speed, add `--timing`: each image writes a line like `timing  photo.jpg  shown 120.0 ms  load 100.0 ms`
 to the terminal (`shown` = from the key press until the image is on its way to the screen, `load` = decoding),
 and closing the app prints the median, the time 9 of 10 images were shown within, and the peak Java heap.

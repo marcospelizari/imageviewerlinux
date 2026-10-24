@@ -6,6 +6,11 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 ### Added
 - Timing log, off by default: `--timing` on the command line writes one line per image to standard error (`shown` = from the key press until the image is handed to the window, `load` = the loader's own time, or `failed after`), and on closing, also with Ctrl+C, a summary: the median, the time 9 of 10 images were shown within, and the peak of each Java heap pool (#23)
 
+- `./gradlew appImage` builds a packaged app in `build/jpackage/linview` (jpackage app image, about 100 MB) with its own Java runtime and JavaFX: it starts without Gradle or an installed Java, also with spaces and accents in the path. No installer or `.desktop` file yet (#54)
+
+### Changed
+- Version 0.1.0 in `build.gradle`, matching the `v0.1.0` tag (#54)
+
 ## [0.1.0] - 2026-10-24 - Phase 2
 ### Added
 - The window opens on the monitor under the mouse pointer (#25)
