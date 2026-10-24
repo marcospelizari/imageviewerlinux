@@ -54,9 +54,12 @@ public class App extends Application {
     private Stage stage;
     private ViewerController<Image> controller;
     private ImageLoader loader;
-    /** Lists folders off the JavaFX thread (#21). */
+    /**
+     * Lists folders off the JavaFX thread (#21), each on its own thread, so a slow folder (USB, network) doesn't hold
+     * up one opened after it (#55). Threads end when idle.
+     */
     private final ExecutorService folders =
-            Executors.newSingleThreadExecutor(Thread.ofPlatform().name("linview-folders").daemon().factory());
+            Executors.newCachedThreadPool(Thread.ofPlatform().name("linview-folders-", 0).daemon().factory());
     private TimingLog timing = TimingLog.OFF;
     private SettingsStore store;
     private Settings settings;

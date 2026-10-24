@@ -10,6 +10,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
 
@@ -52,11 +53,34 @@ class LoadSchedulerTest {
     private final List<Decode> decodes = new ArrayList<>();
     /** Each file's state now; missing = "v1", {@code null} = deleted. */
     private final Map<Path, Object> stamps = new HashMap<>();
-    private final LoadScheduler<String> scheduler = new LoadScheduler<>((file, minResolution, preload, done) -> {
-        Decode decode = new Decode(file, minResolution, preload, done);
-        decodes.add(decode);
-        return () -> decode.cancelled = true;
-    }, file -> stamps.containsKey(file) ? stamps.get(file) : "v1");
+    /** When true, freshness checks wait in {@link #slowStamps} until the test answers them, like a slow USB disk. */
+    private boolean slowDisk;
+    private final List<Runnable> slowStamps = new ArrayList<>();
+    private final LoadScheduler<String> scheduler = new LoadScheduler<>(new LoadScheduler.Decoder<>() {
+        @Override
+        public Runnable decode(Path file, double minResolution, boolean preload,
+                               BiConsumer<Loaded<String>, Object> done) {
+            Decode decode = new Decode(file, minResolution, preload, done);
+            decodes.add(decode);
+            return () -> decode.cancelled = true;
+        }
+
+        @Override
+        public Runnable stamp(Path file, Consumer<Object> done) {
+            boolean[] cancelled = {false};
+            Runnable answer = () -> {
+                if (!cancelled[0]) {
+                    done.accept(stamps.containsKey(file) ? stamps.get(file) : "v1");
+                }
+            };
+            if (slowDisk) {
+                slowStamps.add(answer);
+            } else {
+                answer.run();
+            }
+            return () -> cancelled[0] = true;
+        }
+    });
     private final List<String> shown = new ArrayList<>();
 
     private Runnable select(Path file) {
@@ -102,23 +126,44 @@ class LoadSchedulerTest {
         assertEquals(2, decodes.size());
     }
 
-    /** A preload never delays the selected image: one running is cancelled, and it starts again afterwards. */
+    /**
+     * #55: a running preload still wanted goes on beside the selected image instead of being cancelled, since JavaFX
+     * can't stop a decode it has started: cancelling would only decode it twice.
+     */
     @Test
-    void selectingAnotherImageCancelsTheRunningPreload() {
+    void aRunningPreloadStillWantedGoesOn() {
         select(A);
         scheduler.preload(List.of(B, C), 0);
         last().finish();
         Decode preloadB = last();
 
         select(D);
+        scheduler.preload(List.of(B, C), 0);
 
-        assertTrue(preloadB.cancelled);
-        assertEquals(D, last().file);
+        assertFalse(preloadB.cancelled);
+        assertEquals(D, last().file);   // the selected image starts at once, beside the preload
         assertFalse(last().preload);
         last().finish();
-        scheduler.preload(List.of(B, C), 0);
-        assertEquals(B, last().file);   // B again, now that D is shown
-        assertTrue(last().preload);
+        assertEquals(3, decodes.size());   // no second preload while B still runs
+        preloadB.finish();
+        assertEquals(C, last().file);
+        assertEquals(1, decodes.stream().filter(d -> d.file.equals(B)).count());   // B decoded once
+    }
+
+    /** A running preload whose image is no longer wanted is cancelled. */
+    @Test
+    void aRunningPreloadNoLongerWantedIsCancelled() {
+        select(A);
+        scheduler.preload(List.of(B), 0);
+        last().finish();
+        Decode preloadB = last();
+
+        select(D);
+        scheduler.preload(List.of(C), 0);
+
+        assertTrue(preloadB.cancelled);
+        last().finish();   // D
+        assertEquals(C, last().file);
     }
 
     /** The selected image is the one being preloaded: it waits for that load instead of decoding it twice. */
@@ -225,20 +270,92 @@ class LoadSchedulerTest {
         assertTrue(results.get(0).isFailed());
     }
 
-    /** The full image for a zoom (#22) goes with the image: it isn't kept for later. */
+    /** The full image of a huge one for a zoom (#22) goes with the image: it isn't kept for later (#55). */
     @Test
-    void moreThanThePreloadsAskForIsNotKept() {
+    void aHugeFullImageIsNotKept() {
         select(A);
         scheduler.preload(List.of(), 0);
-        last().done.accept(new Loaded<>("a copy", 3840, 2160, Orientation.UPRIGHT, 0.5, 0), "v1");
+        last().done.accept(new Loaded<>("a copy", 20000, 10000, Orientation.UPRIGHT, 0.1, 0), "v1");
         scheduler.load(A, 1, result -> shown.add(String.valueOf(result.image())));
         assertEquals(1, last().minResolution);
-        last().finish();
+        last().done.accept(new Loaded<>("a full", 20000, 10000, Orientation.UPRIGHT, 1, 0), "v1");
 
         select(A);
 
-        assertEquals(List.of("a copy", "a.jpg", "a copy"), shown);   // the copy again, from memory
+        assertEquals(List.of("a copy", "a full", "a copy"), shown);   // the copy again, from memory
         assertEquals(2, decodes.size());
+    }
+
+    /** #55: preloads ask for what the zoom mode needs; the decoder caps huge ones at 40 MP. */
+    @Test
+    void preloadsAskForWhatTheZoomModeNeeds() {
+        scheduler.load(A, 0.25, result -> { });
+        scheduler.preload(List.of(B), 0.25);
+        last().finish();
+
+        assertEquals(B, last().file);
+        assertTrue(last().preload);
+        assertEquals(0.25, last().minResolution);
+    }
+
+    /** #55: the selected image takes its preload over; a screen copy too small for the zoom is then decoded again. */
+    @Test
+    void aTakenOverPreloadWithTooLittleResolutionIsDecodedAgain() {
+        select(A);
+        scheduler.preload(List.of(B), 0);
+        last().finish();
+        Decode preloadB = last();
+
+        scheduler.load(B, 1, result -> shown.add(String.valueOf(result.image())));
+        scheduler.preload(List.of(C), 0);
+        assertEquals(2, decodes.size());   // waiting for the preload
+        preloadB.done.accept(new Loaded<>("b copy", 20000, 10000, Orientation.UPRIGHT, 0.1, 0), "v1");
+
+        assertEquals(B, last().file);
+        assertEquals(1, last().minResolution);
+        assertFalse(last().preload);
+        assertEquals(List.of("a.jpg"), shown);
+        last().finish();
+        assertEquals(List.of("a.jpg", "b.jpg"), shown);
+        assertEquals(C, last().file);   // preloading goes on afterwards
+    }
+
+    /** #55: the freshness check runs on the file system, which can be slow; a late answer for an old pick is unused. */
+    @Test
+    void aSlowFreshnessCheckDoesNotShowAnImageNoLongerSelected() {
+        select(A);
+        scheduler.preload(List.of(B, C), 0);
+        last().finish();
+        last().finish();
+        last().finish();   // B and C kept
+        slowDisk = true;
+
+        select(B);
+        assertEquals(List.of("a.jpg"), shown);   // not shown before the check answers
+        select(C);
+        slowStamps.get(0).run();   // B's answer arrives late: ignored
+        assertEquals(List.of("a.jpg"), shown);
+        slowStamps.get(1).run();
+
+        assertEquals(List.of("a.jpg", "c.jpg"), shown);
+        assertEquals(3, decodes.size());   // both from memory, nothing decoded
+    }
+
+    /** While the freshness check runs, the selected image counts as loading: no preload starts. */
+    @Test
+    void noPreloadStartsWhileTheFreshnessCheckRuns() {
+        select(A);
+        scheduler.preload(List.of(B), 0);
+        last().finish();
+        last().finish();   // B kept
+        slowDisk = true;
+
+        select(B);
+        scheduler.preload(List.of(C), 0);
+        assertEquals(2, decodes.size());
+
+        slowStamps.get(0).run();
+        assertEquals(C, last().file);
     }
 
     /** A kept image with less resolution than asked for (e.g. after switching to actual size) is loaded again. */
