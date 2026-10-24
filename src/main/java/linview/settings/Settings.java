@@ -68,6 +68,17 @@ public final class Settings {
         return background;
     }
 
+    /** {@link #background()} as {@code #rrggbb}: the presets are black, #333333, #808080 and white (#31). */
+    public String backgroundColour() {
+        return switch (background) {
+            case "black" -> "#000000";
+            case "darkgrey" -> "#333333";
+            case "grey" -> "#808080";
+            case "white" -> "#ffffff";
+            default -> background;
+        };
+    }
+
     /** Accepts any case and surrounding spaces; stored in lower case. */
     public void setBackground(String colour) {
         String value = require(colour, "background").trim().toLowerCase(Locale.ROOT);

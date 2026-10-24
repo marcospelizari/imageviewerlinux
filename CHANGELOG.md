@@ -3,6 +3,10 @@
 All notable changes are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Added
+- Background colour from the settings file (`background`): around the image and behind its transparent parts, in a window and in full-screen. Presets `black` (default), `darkgrey` (#333333), `grey` (#808080), `white`, or `#RRGGBB`. Messages turn dark on a light background (#31)
+- In full-screen the mouse pointer hides after 2 s without movement and comes back when the mouse moves (#33)
+
 ### Changed
 - The window code moved from `App` to `ui.ViewerWindow`: Stage and Scene, the Open dialog, full-screen and what the controller shows. Every action goes through its one entry point `execute(Keys.Action)`, which the taskbar, panels and menu will call too. `App` only builds, connects, starts and stops. No change in behaviour (#53)
 
