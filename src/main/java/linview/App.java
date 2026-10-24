@@ -12,7 +12,6 @@ import java.util.function.Consumer;
 
 import javafx.application.Application;
 import javafx.application.Platform;
-import javafx.beans.InvalidationListener;
 import javafx.geometry.Dimension2D;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
@@ -120,10 +119,7 @@ public class App extends Application {
                 stage.setTitle(title);
             }
         }, timing, folders, Platform::runLater);
-        viewer.sendGesturesTo(controller);
-        InvalidationListener resized = obs -> controller.resize(viewer.getWidth(), viewer.getHeight());
-        viewer.widthProperty().addListener(resized);
-        viewer.heightProperty().addListener(resized);
+        viewer.connect(controller, stage);
 
         Scene scene = new Scene(viewer, 1024, 700);
         scene.setOnKeyPressed(this::keyPressed);
