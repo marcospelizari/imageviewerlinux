@@ -4,10 +4,13 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 
 ## [Unreleased]
 ### Added
+- Preloading: after each image, the next 3 in the direction you move and 1 behind are loaded in the background, one at a time, so they show at once. The image you selected always goes first: a preload never runs while it loads, one running is cancelled, and an image already being preloaded is taken over instead of loaded twice. Only these images are kept; a file changed or deleted since is loaded again. Opening a folder lists and sorts it in the background; a folder opened earlier that finishes listing later is ignored (#21)
 - Very large images (over 40 MP) are decoded only as large as the screen needs, then in full when zooming past that, e.g. actual size or + / −. A 229 MP JPEG opens in fit in about 2 s instead of 3.4 s, with a 23 MB Java heap instead of 663 MB. Normal photos load whole, as before. Actual size and zoom lock ask for the pixels they need at once, so no image is decoded twice. The EXIF orientation and the image size are read off the UI thread (#19, #22)
 - Timing log, off by default: `--timing` on the command line writes one line per image to standard error (`shown` = from the key press until the image is handed to the window, `load` = the loader's own time, or `failed after`), and on closing, also with Ctrl+C, a summary: the median, the time 9 of 10 images were shown within, and the peak of each Java heap pool (#23)
-
 - `./gradlew appImage` builds a packaged app in `build/jpackage/linview` (jpackage app image, about 100 MB) with its own Java runtime and JavaFX: it starts without Gradle or an installed Java, also with spaces and accents in the path. No installer or `.desktop` file yet (#54)
+
+### Fixed
+- JPEGs never showed in the packaged app on systems without `libjpeg.so.8` (e.g. Fedora/Bazzite; since #19): the image size is now read with metadata-extractor in the same pass as the EXIF orientation, instead of Java's native JPEG reader. A load that fails unexpectedly now shows the usual "Can't show" message and is logged, instead of staying "loading" forever (#21)
 
 ### Changed
 - Settings are saved in the background, never on the UI thread: quick changes in a row (Ctrl + wheel with zoom lock on) end in one write of the newest values, and closing the app writes a change still pending. The file is still replaced only after the new one is fully written. Settings are read before the window opens (#52)

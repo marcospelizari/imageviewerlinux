@@ -166,4 +166,25 @@ class ImageListTest {
         IOException hidden = assertThrows(IOException.class, () -> ImageList.open(folder.resolve(".secret.jpg")));
         assertEquals("Hidden files are not shown: .secret.jpg", hidden.getMessage());
     }
+
+    /** #21: the images to preload, ahead in the direction of movement first, then behind; stops at the ends. */
+    @Test
+    void upcomingImagesFollowTheDirection(@TempDir Path dir) throws IOException {
+        for (String name : List.of("1.jpg", "2.jpg", "3.jpg", "4.jpg", "5.jpg", "6.jpg")) {
+            Files.createFile(dir.resolve(name));
+        }
+        ImageList third = ImageList.open(dir.resolve("3.jpg"));
+
+        assertEquals(names("4.jpg", "5.jpg", "6.jpg", "2.jpg"), names(third.upcoming(true, 3, 1)));
+        assertEquals(names("2.jpg", "1.jpg", "4.jpg"), names(third.upcoming(false, 3, 1)));
+        assertEquals(names("2.jpg", "3.jpg", "4.jpg"), names(ImageList.open(dir).upcoming(true, 3, 1)));
+    }
+
+    private static List<String> names(String... names) {
+        return List.of(names);
+    }
+
+    private static List<String> names(List<Path> files) {
+        return files.stream().map(f -> f.getFileName().toString()).toList();
+    }
 }

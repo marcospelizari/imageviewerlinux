@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.AfterEach;
@@ -65,6 +66,9 @@ class ViewerControllerTest {
     private SettingsStore store;
     private ViewerController<String> controller;
     private final List<String> timingLines = new ArrayList<>();
+    /** What the controller asked to preload, one list per call (#21). */
+    private final List<List<String>> preloads = new ArrayList<>();
+    private double preloadResolution;
     /** The timing log's clock, in nanoseconds. */
     private long now;
 
@@ -76,14 +80,29 @@ class ViewerControllerTest {
         settingsFile = folder.resolve("config/settings.properties");
         settings = new Settings();
         store = new SettingsStore(settingsFile, warnings::add);
-        controller = new ViewerController<>(settings, store,
-                (file, minResolution, done) -> {
-                    boolean[] cancelled = {false};
-                    loads.add(new Pending(file, minResolution, done, cancelled));
-                    if (immediately != null) {
-                        done.accept(immediately);
+        controller = newController(Runnable::run);
+        controller.resize(1920, 1080);
+    }
+
+    /** A controller over the fakes; {@code background} runs folder listings (#21). */
+    private ViewerController<String> newController(Executor background) {
+        return new ViewerController<>(settings, store,
+                new ViewerController.ImageSource<>() {
+                    @Override
+                    public Runnable load(Path file, double minResolution, Consumer<Loaded<String>> done) {
+                        boolean[] cancelled = {false};
+                        loads.add(new Pending(file, minResolution, done, cancelled));
+                        if (immediately != null) {
+                            done.accept(immediately);
+                        }
+                        return () -> cancelled[0] = true;
                     }
-                    return () -> cancelled[0] = true;
+
+                    @Override
+                    public void preload(List<Path> files, double minResolution) {
+                        preloads.add(files.stream().map(f -> f.getFileName().toString()).toList());
+                        preloadResolution = minResolution;
+                    }
                 },
                 new ViewerController.Display<>() {
                     @Override
@@ -104,8 +123,7 @@ class ViewerControllerTest {
                     public void showTitle(String text) {
                         title = text;
                     }
-                }, new TimingLog(timingLines::add, () -> now));
-        controller.resize(1920, 1080);
+                }, new TimingLog(timingLines::add, () -> now), background, Runnable::run);
     }
 
     /** Lets a background write finish before the temporary folder is removed. */
@@ -116,6 +134,84 @@ class ViewerControllerTest {
 
     private Pending lastLoad() {
         return loads.get(loads.size() - 1);
+    }
+
+    /** #21: after each image the next ones are named for preloading, in the direction of movement. */
+    @Test
+    void preloadingFollowsTheDirectionOfMovement() {
+        controller.open(folder);
+        assertEquals(List.of("b.jpg", "c.jpg"), preloads.get(0));   // from the first image: ahead only
+
+        controller.last();
+        assertEquals(List.of("b.jpg", "a.jpg"), preloads.get(1));   // backward from c
+
+        controller.previous();
+        assertEquals(List.of("a.jpg", "c.jpg"), preloads.get(2));   // one more back, one behind
+
+        controller.next();
+        assertEquals(List.of("b.jpg"), preloads.get(3));   // at the last image: nothing ahead, b behind
+    }
+
+    /** Preloads are decoded like the image on screen would be, for the zoom mode (#19, #21). */
+    @Test
+    void preloadsAskForWhatTheZoomModeNeeds() {
+        controller.open(folder);
+        assertEquals(0, preloadResolution);
+
+        controller.setZoomMode(Zoom.Mode.ACTUAL);
+        controller.next();
+
+        assertEquals(1, preloadResolution);
+    }
+
+    @Test
+    void nothingOpenStopsPreloading() {
+        controller.open(folder);
+        controller.open(folder.resolve("missing"));
+
+        assertEquals(List.of(), preloads.get(preloads.size() - 1));
+    }
+
+    /** #21: listing runs in the background; the image on screen stays and can be navigated meanwhile. */
+    @Test
+    void aFolderIsListedInTheBackground() throws IOException {
+        List<Runnable> listings = new ArrayList<>();
+        controller = newController(listings::add);
+        controller.resize(1920, 1080);
+        controller.open(folder);
+        listings.remove(0).run();
+        lastLoad().finish(800, 600);
+
+        Path other = Files.createDirectory(folder.resolve("other"));
+        Files.createFile(other.resolve("x.jpg"));
+        controller.open(other);
+        assertEquals("a.jpg", shownImage);   // nothing changes until it is listed
+        controller.next();
+        lastLoad().finish(800, 600);
+        assertEquals("b.jpg", shownImage);
+
+        listings.remove(0).run();
+        lastLoad().finish(800, 600);
+
+        assertEquals("x.jpg", shownImage);
+        assertEquals("x.jpg — 1/1 — 800×600 — 100% — linview", title);
+    }
+
+    /** A listing for an earlier open that finishes late is ignored. */
+    @Test
+    void aFolderOpenedEarlierIsIgnoredWhenItsListingFinishesLate() throws IOException {
+        List<Runnable> listings = new ArrayList<>();
+        controller = newController(listings::add);
+        controller.resize(1920, 1080);
+        Path other = Files.createDirectory(folder.resolve("other"));
+        Files.createFile(other.resolve("x.jpg"));
+
+        controller.open(folder);
+        controller.open(other);
+        listings.get(1).run();   // the later open finishes first
+        listings.get(0).run();
+
+        assertEquals(List.of("x.jpg"), loads.stream().map(l -> l.file().getFileName().toString()).toList());
     }
 
     /** #19: a screen-size copy that is sharp enough for the zoom needs nothing more. */
