@@ -3,6 +3,8 @@
 All notable changes are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [0.2.0] - 2026-10-24 - Phase 3
 ### Added
 - Sharp shrinking: when an image is shown smaller than its pixels (fit on most photos, zoom below 100 %), it is redrawn with Lanczos-3 in the background 150 ms after the last change and swapped in, one pixel per screen pixel, instead of the graphics card's grainy scaling. The first view still appears at once, zooming never waits, and dragging keeps the sharp copy. Our own resampler spread over the CPU cores (≈ 100 ms for 7.2 MP → 1080p; TwelveMonkeys' `ResampleOp` took 1–2 s). Not for animated GIFs or images decoded over 40 MP (#24)
 - Any desktop scaling: zoom works in physical screen pixels, so actual size (100 %) shows one image pixel per screen pixel also at 150–200 % scaling (4K monitors), instead of 2×2 and blurred. The image's corner is placed on a whole screen pixel. Fit modes, the zoom % in the title, the wheel, drags and Ctrl + wheel use the same pixels. Moving the window to a monitor with other scaling counts as a resize. Text keeps following the desktop scaling (#46)
@@ -21,7 +23,7 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - Java heap limit raised from 1.5 GB to 2 GB (`-Xmx2g`), so very large JPEGs fit: JavaFX decodes them at full size even for a smaller copy, about 950 MB for a 317 MP image (Marcos's decision; #57)
 - Preloads ask for what the zoom mode needs, but a very large neighbour (over 40 MP) is decoded to at most 40 MP: zoom lock at 25 % still gets huge images preloaded at 25 %, while actual size no longer preloads them in full, which could run out of memory; they are decoded in full when selected. Nothing decoded over 40 MP is kept. A preload that is still wanted keeps running when another image is selected instead of being cancelled: JavaFX can't stop a decode it has started, so cancelling only wasted it and decoded the image again later (#55)
 - Settings are saved in the background, never on the UI thread: quick changes in a row (Ctrl + wheel with zoom lock on) end in one write of the newest values, and closing the app writes a change still pending. The file is still replaced only after the new one is fully written. Settings are read before the window opens (#52)
-- Version 0.1.0 in `build.gradle`, matching the `v0.1.0` tag (#54)
+- Version 0.1.0 in `build.gradle`, matching the `v0.1.0` tag (#54); 0.2.0 for this release
 
 ## [0.1.0] - 2026-10-24 - Phase 2
 ### Added
