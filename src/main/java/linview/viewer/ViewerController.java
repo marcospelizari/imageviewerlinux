@@ -200,6 +200,12 @@ public final class ViewerController<I> {
             nothingOpen(problem);
             return;
         }
+        // Each open starts unlocked, in the mode before the lock (fit by default): open, see it fit, lock that %
+        // (Marcos, 2026-10-24, #59). Also when the file says lock, e.g. closed while locked.
+        if (settings.zoomMode() == Zoom.Mode.LOCK) {
+            settings.setZoomMode(modeBeforeLock);
+            store.save(settings);
+        }
         images = list;
         forward = true;
         if (images.isEmpty()) {

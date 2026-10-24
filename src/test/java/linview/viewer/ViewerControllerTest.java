@@ -819,16 +819,40 @@ class ViewerControllerTest {
         assertFalse(title.contains("locked"), title);
     }
 
+    /** #59: closed while locked, the next start fits the first image; the lock is pressed again for its %. */
     @Test
-    void zoomLockAfterARestartReturnsToFit() {
+    void aLockFromBeforeIsLeftWhenAnImageIsOpened() throws IOException {
         settings.setZoomMode(Zoom.Mode.LOCK);   // as loaded from the settings file
         settings.setZoomPercent(70);
         controller.open(folder);
         lastLoad().finish(3840, 2160);
-        assertEquals(0.7, shownView.scale(), 1e-9);
-        controller.toggleZoomLock();
         assertEquals(Zoom.Mode.FIT, settings.zoomMode());
         assertEquals(0.5, shownView.scale(), 1e-9);
+
+        controller.toggleZoomLock();   // locks the fit %
+        controller.next();
+        lastLoad().finish(1200, 1800);
+        assertEquals(0.5, shownView.scale(), 1e-9);
+        store.flush();
+        assertTrue(Files.readString(settingsFile).contains("zoom.mode=lock\nzoom.percent=50\n"));
+    }
+
+    /** #59: each open, by Ctrl+O too, starts in the mode before the lock. */
+    @Test
+    void openingAgainLeavesTheLock() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);
+        controller.setZoomMode(Zoom.Mode.WIDTH);
+        controller.zoomOut();
+        controller.toggleZoomLock();
+        assertEquals(Zoom.Mode.LOCK, settings.zoomMode());
+
+        controller.open(folder.resolve("b.jpg"));
+        lastLoad().finish(3840, 2160);
+
+        assertEquals(Zoom.Mode.WIDTH, settings.zoomMode());
+        assertEquals(1920.0 / 3840, shownView.scale(), 1e-9);   // fit width
+        assertFalse(title.contains("locked"), title);
     }
 
     @Test
