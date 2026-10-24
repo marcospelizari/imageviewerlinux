@@ -194,6 +194,19 @@ public final class ViewerController<I> {
         showCurrent();
     }
 
+    /**
+     * The window closes (R-FS-02, #26): the next start opens in the same mode, and a window at the same place and
+     * size, {@code x}, {@code y} its corner and {@code width} × {@code height} its content, as last seen outside
+     * full-screen. Saved now; the store writes it before the app ends.
+     */
+    public void windowClosed(boolean fullScreen, double x, double y, double width, double height) {
+        settings.setFullScreen(fullScreen);
+        settings.setWindowPosition(x, y);
+        settings.setWindowWidth(Math.max(width, Settings.MIN_WINDOW));
+        settings.setWindowHeight(Math.max(height, Settings.MIN_WINDOW));
+        store.save(settings);
+    }
+
     /** At start without a file, or after the Open dialog was cancelled with nothing open. */
     public void showOpenHintIfEmpty() {
         if (images == null || images.isEmpty()) {

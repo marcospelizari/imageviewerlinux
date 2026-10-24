@@ -19,7 +19,7 @@ public final class Settings {
     private static final Pattern HEX_COLOUR = Pattern.compile("#[0-9a-f]{6}");
 
     /** Smallest window that is still usable. */
-    static final int MIN_WINDOW = 200;
+    public static final int MIN_WINDOW = 200;
     static final int MAX_WINDOW = 100_000;
 
     private Zoom.Mode zoomMode = Zoom.Mode.FIT;

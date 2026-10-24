@@ -7,8 +7,11 @@ import java.util.Locale;
 
 import java.nio.file.Path;
 
+import javafx.beans.InvalidationListener;
+import javafx.geometry.Dimension2D;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
 import javafx.scene.input.MouseButton;
 import javafx.scene.layout.StackPane;
@@ -47,9 +50,15 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
         return "/linview/icons/linview-" + size + ".png";
     }
 
+    /** The window's place and size as last seen outside full-screen, for the next start (#26). */
+    private double windowX;
+    private double windowY;
+    private double windowWidth;
+    private double windowHeight;
+
     /**
      * Builds the scene for {@code controller}, which is shown to, with the background colour of {@code settings}, and
-     * opens the window on the mouse's monitor.
+     * opens the window as it was last closed (R-FS-02, #26): full-screen or at its place, on the mouse's monitor.
      */
     public void show(ViewerController<Image> controller, Settings settings) {
         this.controller = controller;
@@ -58,7 +67,9 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
 
         EdgePanels panels = new EdgePanels(stage, viewer);
         panels.setTop(strip, strip::scrollToCurrent);
-        Scene scene = new Scene(new StackPane(viewer, panels.layer()), 1024, 700);
+        Dimension2D content = WindowPlacement.placeAtStart(stage, settings.windowX(), settings.windowY(),
+                settings.windowWidth(), settings.windowHeight());
+        Scene scene = new Scene(new StackPane(viewer, panels.layer()), content.getWidth(), content.getHeight());
         scene.getStylesheets().add(ViewerWindow.class.getResource("/linview/viewer.css").toExternalForm());
         panels.watch(scene);
         scene.setOnKeyPressed(this::keyPressed);
@@ -70,13 +81,36 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
         });
 
         stage.setFullScreenExitHint("");
+        stage.setFullScreenExitKeyCombination(KeyCombination.NO_MATCH);   // Esc quits, also from full-screen (#26)
         stage.setTitle(ViewerController.TITLE);
         for (int size : ICON_SIZES) {
             stage.getIcons().add(new Image(ViewerWindow.class.getResource(iconPath(size)).toExternalForm()));
         }
         stage.setScene(scene);
-        WindowPlacement.placeOnMouseScreen(stage, scene.getWidth(), scene.getHeight());
         stage.show();
+        rememberWindow(scene);
+        stage.setOnHiding(e -> controller.windowClosed(stage.isFullScreen(), windowX, windowY, windowWidth,
+                windowHeight));
+        if (settings.fullScreen()) {
+            stage.setFullScreen(true);   // on the monitor the window just opened on
+        }
+    }
+
+    /** Follows the window's place and size, except in full-screen, where they are the screen's. */
+    private void rememberWindow(Scene scene) {
+        InvalidationListener changed = obs -> {
+            if (!stage.isFullScreen() && !stage.isIconified()) {
+                windowX = stage.getX();
+                windowY = stage.getY();
+                windowWidth = scene.getWidth();
+                windowHeight = scene.getHeight();
+            }
+        };
+        changed.invalidated(null);
+        stage.xProperty().addListener(changed);
+        stage.yProperty().addListener(changed);
+        scene.widthProperty().addListener(changed);
+        scene.heightProperty().addListener(changed);
     }
 
     private void keyPressed(KeyEvent e) {
@@ -104,12 +138,8 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
             case ZOOM_LOCK -> controller.toggleZoomLock();
             case ROTATE_RIGHT -> controller.rotateRight();
             case ROTATE_LEFT -> controller.rotateLeft();
-            case ESCAPE -> {
-                // In full-screen JavaFX itself leaves full-screen on Esc.
-                if (!stage.isFullScreen()) {
-                    stage.close();
-                }
-            }
+            // Quits, also from full-screen, which the next start remembers (Marcos, 2026-10-24, #26).
+            case ESCAPE -> stage.close();
         }
     }
 

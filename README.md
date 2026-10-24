@@ -19,7 +19,7 @@ A fast image viewer for Linux, inspired by FastStone Image Viewer.
 - The next images are loaded in the background and recently seen ones kept (up to 300 MB), so they show at once. Very large images are decoded only as large as needed; one too large for memory shows a message
 - R / L turn the image on screen 90° right / left; the file is not changed, and the next image opens upright again
 - Window title shows the file name, its position in the folder, the image size and the zoom %
-- The window opens on the monitor under the mouse pointer; Enter toggles full-screen, where the mouse pointer hides after 2 s without movement
+- The window opens on the monitor under the mouse pointer, as it was closed (full-screen, or the same size and place); Enter toggles full-screen, where the mouse pointer hides after 2 s without movement
 - In full-screen, moving the mouse to the top edge shows a thumbnail strip of the folder; click a thumbnail to open it. Thumbnails are shared with your file manager (`~/.cache/thumbnails`)
 
 ## Roadmap
@@ -73,7 +73,7 @@ so new windows open on the monitor with the mouse pointer.
 | Home / End | First / last image |
 | Ctrl+O or O | Open an image |
 | Enter, F11 or double-click | Full-screen on/off |
-| Esc | Leave full-screen; quit from a window |
+| Esc | Quit, also from full-screen (the next start is in full-screen then) |
 | + / − | Zoom in / out (keypad too) |
 | Mouse wheel | Scroll the image, or next/previous image (`wheel` setting) |
 | Ctrl + mouse wheel | Zoom in / out at the mouse pointer |
@@ -97,9 +97,9 @@ Edit it while linview is closed. Most settings are used by features that are sti
 | `wheel` | `scroll` (wheel scrolls the image, stops at its edges) / `navigate` (wheel down = next image, up = previous) | `scroll` |
 | `background` | `black`, `darkgrey` (#333333), `grey` (#808080), `white` or `#RRGGBB`: around the image and behind its transparent parts | `black` |
 | `overlay.fileName` | `true` / `false`: file name in full-screen | `true` |
-| `start.fullScreen` | `true` / `false`: start in full-screen (last-used mode) | `false` |
-| `window.x`, `window.y` | window position; empty = the monitor under the mouse pointer | empty |
-| `window.width`, `window.height` | window size, at least 200 | `1024`, `700` |
+| `start.fullScreen` | `true` / `false`: start in full-screen; saved on closing | `false` |
+| `window.x`, `window.y` | window position, saved on closing; used when the mouse is on that monitor at start, else the window is centred on the mouse's monitor | empty |
+| `window.width`, `window.height` | window size, at least 200; saved on closing | `1024`, `700` |
 
 ## License
 GPL-3.0 — see [LICENSE](LICENSE).
