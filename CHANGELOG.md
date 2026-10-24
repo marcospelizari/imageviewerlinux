@@ -4,6 +4,7 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 
 ## [Unreleased]
 ### Added
+- Very large images (over 40 MP) are decoded only as large as the screen needs, then in full when zooming past that, e.g. actual size or + / −. A 229 MP JPEG opens in fit in about 2 s instead of 3.4 s, with a 23 MB Java heap instead of 663 MB. Normal photos load whole, as before. Actual size and zoom lock ask for the pixels they need at once, so no image is decoded twice. The EXIF orientation and the image size are read off the UI thread (#19, #22)
 - Timing log, off by default: `--timing` on the command line writes one line per image to standard error (`shown` = from the key press until the image is handed to the window, `load` = the loader's own time, or `failed after`), and on closing, also with Ctrl+C, a summary: the median, the time 9 of 10 images were shown within, and the peak of each Java heap pool (#23)
 
 - `./gradlew appImage` builds a packaged app in `build/jpackage/linview` (jpackage app image, about 100 MB) with its own Java runtime and JavaFX: it starts without Gradle or an installed Java, also with spaces and accents in the path. No installer or `.desktop` file yet (#54)

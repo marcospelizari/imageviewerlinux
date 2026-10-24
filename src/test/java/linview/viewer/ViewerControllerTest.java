@@ -29,10 +29,21 @@ import linview.settings.SettingsStore;
 class ViewerControllerTest {
 
     /** A load the test finishes by hand, in any order. */
-    private record Pending(Path file, Consumer<Loaded<String>> done, boolean[] cancelled) {
+    private record Pending(Path file, double minResolution, Consumer<Loaded<String>> done, boolean[] cancelled) {
+
+        boolean full() {
+            return minResolution >= 1;
+        }
+
 
         void finish(double width, double height) {
             done.accept(new Loaded<>(file.getFileName().toString(), width, height, Orientation.UPRIGHT));
+        }
+
+        /** A copy with {@code resolution} decoded pixels per real pixel, named "{@code name} copy" or "… full". */
+        void finish(double width, double height, double resolution) {
+            String kind = resolution < 1 ? " copy" : " full";
+            done.accept(new Loaded<>(file.getFileName() + kind, width, height, Orientation.UPRIGHT, resolution, 0));
         }
     }
 
@@ -66,9 +77,9 @@ class ViewerControllerTest {
         settings = new Settings();
         store = new SettingsStore(settingsFile, warnings::add);
         controller = new ViewerController<>(settings, store,
-                (file, done) -> {
+                (file, minResolution, done) -> {
                     boolean[] cancelled = {false};
-                    loads.add(new Pending(file, done, cancelled));
+                    loads.add(new Pending(file, minResolution, done, cancelled));
                     if (immediately != null) {
                         done.accept(immediately);
                     }
@@ -76,10 +87,10 @@ class ViewerControllerTest {
                 },
                 new ViewerController.Display<>() {
                     @Override
-                    public void showImage(String image, Orientation orientation, Zoom.View view) {
-                        shownImage = image;
+                    public void showImage(Loaded<String> image, Zoom.View view) {
+                        shownImage = image.image();
                         shownView = view;
-                        shownOrientation = orientation;
+                        shownOrientation = image.orientation();
                         message = null;
                     }
 
@@ -107,13 +118,135 @@ class ViewerControllerTest {
         return loads.get(loads.size() - 1);
     }
 
+    /** #19: a screen-size copy that is sharp enough for the zoom needs nothing more. */
+    @Test
+    void aScreenSizeCopyAtFitLoadsNothingMore() {
+        controller.open(folder);
+        assertFalse(lastLoad().full());
+        lastLoad().finish(3840, 2160, 0.5);   // decoded at 1920×1080
+
+        assertEquals("a.jpg copy", shownImage);
+        assertEquals(new Zoom.View(0.5, 0, 0), shownView);
+        assertEquals("a.jpg — 1/3 — 3840×2160 — 50% — linview", title);   // the real size, not the copy's
+        assertEquals(1, loads.size());
+    }
+
+    /** #22: actual size needs more pixels than the copy: the full image is loaded once and swapped in place. */
+    @Test
+    void actualSizeLoadsTheFullImageOnceAndSwapsItIn() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160, 0.5);
+        controller.setZoomMode(Zoom.Mode.ACTUAL);   // 1 pressed once the copy is on screen
+        assertEquals("a.jpg copy", shownImage);   // stretched until the full one arrives
+        Pending full = lastLoad();
+        assertTrue(full.full());
+        assertEquals(2, loads.size());
+
+        controller.pan(-100, -50);
+        controller.zoomOut();
+        controller.zoomIn();
+        assertEquals(2, loads.size());   // asked for once
+        Zoom.View before = shownView;
+
+        full.finish(3840, 2160, 1);
+
+        assertEquals("a.jpg full", shownImage);
+        assertEquals(before, shownView);   // same place and zoom
+        assertEquals("a.jpg — 1/3 — 3840×2160 — 100% — linview", title);
+    }
+
+    /** Each zoom mode asks the loader at once for what it will need, so no image is decoded twice. */
+    @Test
+    void theFirstLoadAsksForWhatTheZoomModeNeeds() {
+        controller.open(folder);
+        assertEquals(0, lastLoad().minResolution());   // fit: the screen-size copy
+
+        controller.setZoomMode(Zoom.Mode.ACTUAL);
+        controller.next();
+        assertEquals(1, lastLoad().minResolution());
+
+        settings.setZoomPercent(70);
+        controller.setZoomMode(Zoom.Mode.LOCK);
+        controller.next();
+        assertEquals(0.7, lastLoad().minResolution());
+    }
+
+    @Test
+    void zoomingInPastTheCopyLoadsTheFullImage() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160, 0.5);
+        controller.zoomOut();
+        assertEquals(1, loads.size());
+
+        controller.zoomIn();
+        controller.zoomIn();
+
+        assertTrue(lastLoad().full());
+        assertEquals(2, loads.size());
+    }
+
+    /** The full image belongs to one image: moving on cancels it, and a late one is ignored. */
+    @Test
+    void theFullImageOfAPreviousImageIsCancelledAndIgnored() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160, 0.5);
+        controller.setZoomMode(Zoom.Mode.ACTUAL);   // 1 pressed once the copy is on screen
+        Pending full = lastLoad();
+
+        controller.next();
+        assertTrue(full.cancelled()[0]);
+        lastLoad().finish(800, 600);
+        full.finish(3840, 2160, 1);
+
+        assertEquals("b.jpg", shownImage);
+    }
+
+    @Test
+    void aFailedFullImageKeepsTheCopy() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160, 0.5);
+        controller.setZoomMode(Zoom.Mode.ACTUAL);   // 1 pressed once the copy is on screen
+
+        lastLoad().done().accept(Loaded.failed());
+
+        assertEquals("a.jpg copy", shownImage);
+        assertNull(message);
+    }
+
+    /** A rotation made while the full image loads stays when it arrives. */
+    @Test
+    void theFullImageKeepsARotation() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160, 0.5);
+        controller.setZoomMode(Zoom.Mode.ACTUAL);   // 1 pressed once the copy is on screen
+        Pending full = lastLoad();
+        controller.rotateRight();
+        Orientation turned = shownOrientation;
+
+        full.finish(3840, 2160, 1);
+
+        assertEquals("a.jpg full", shownImage);
+        assertEquals(turned, shownOrientation);
+        assertEquals(2, loads.size());   // the rotation asked for nothing new
+    }
+
+    @Test
+    void timingLogsTheFullImage() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160, 0.5);
+        controller.setZoomMode(Zoom.Mode.ACTUAL);   // 1 pressed once the copy is on screen
+        lastLoad().done().accept(new Loaded<>("a.jpg", 3840, 2160, Orientation.UPRIGHT, 1, 250));
+
+        assertEquals("timing  a.jpg  full resolution, load 250.0 ms", timingLines.get(1));
+    }
+
     /** #23: shown = from asking for the image until it's handed to the window; load = the loader's own time. */
     @Test
     void timingLogsEachImageOnceWhenShown() {
         now = 1_000_000_000L;
         controller.open(folder);
         now += 120_000_000L;
-        lastLoad().done().accept(new Loaded<>("a.jpg", 800, 600, Orientation.UPRIGHT, 100));
+        lastLoad().done().accept(new Loaded<>("a.jpg", 800, 600, Orientation.UPRIGHT, 1, 100));
 
         controller.zoomIn();
         controller.rotateRight();

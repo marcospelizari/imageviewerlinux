@@ -47,6 +47,13 @@ public final class TimingLog {
         out.accept(String.format(Locale.ROOT, "timing  %s  shown %.1f ms  load %.1f ms", name, millis, loadMillis));
     }
 
+    /** #22: the full image of {@code name} replaced its screen-size copy. */
+    void full(String name, double loadMillis) {
+        if (out != null) {
+            out.accept(String.format(Locale.ROOT, "timing  %s  full resolution, load %.1f ms", name, loadMillis));
+        }
+    }
+
     void failed(String name, long start) {
         if (out != null) {
             out.accept(String.format(Locale.ROOT, "timing  %s  failed after %.1f ms", name, millisSince(start)));

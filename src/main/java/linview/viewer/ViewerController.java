@@ -28,8 +28,14 @@ public final class ViewerController<I> {
     /** One wheel notch scrolls this part of the window height (decided 2026-10-22). */
     static final double SCROLL_STEP = 0.1;
 
+    /** Rounding slack before a screen-size copy counts as too small for the zoom (#22). */
+    static final double FULL_RESOLUTION_SLACK = 1.001;
+
     /**
-     * Loads image files. Every implementation (the JavaFX loader, test fakes, later the cache) keeps this contract:
+     * Loads image files: large enough for the screen and with at least {@code minResolution} decoded pixels per real
+     * pixel (1 = the full image), so the result may be a smaller copy ({@link Loaded#resolution()} below 1). Every
+     * implementation (the JavaFX loader, test fakes, later the cache) keeps this
+     * contract:
      * <ul>
      *   <li>{@code done} is called at most once, on the JavaFX thread, with the image or {@link Loaded#failed()};</li>
      *   <li>it may be called before {@code load} returns, e.g. when the image is already in memory;</li>
@@ -39,13 +45,16 @@ public final class ViewerController<I> {
      */
     @FunctionalInterface
     public interface ImageSource<I> {
-        Runnable load(Path file, Consumer<Loaded<I>> done);
+        Runnable load(Path file, double minResolution, Consumer<Loaded<I>> done);
     }
 
     /** What the window shows. */
     public interface Display<I> {
-        /** {@code image} turned upright with {@code orientation}, drawn as {@code view} describes. */
-        void showImage(I image, Orientation orientation, Zoom.View view);
+        /**
+         * {@code image} turned upright with its orientation, drawn at its real size times the view's scale, as
+         * {@code view} describes; a smaller decoded copy is stretched to that size.
+         */
+        void showImage(Loaded<I> image, Zoom.View view);
 
         void showMessage(String text);
 
@@ -74,6 +83,9 @@ public final class ViewerController<I> {
     /** Identity of the latest load: a result for an earlier one is ignored, even if it can't be cancelled. */
     private long request;
     private Runnable cancel = () -> { };
+    /** The full-resolution load of the current image (#22), asked for at most once per image. */
+    private Runnable cancelFull = () -> { };
+    private boolean fullRequested;
     /** The image on screen, and the load it came from; {@code null} when a message is shown. */
     private Loaded<I> shown;
     private long shownRequest;
@@ -338,6 +350,7 @@ public final class ViewerController<I> {
         request++;
         timingPending = false;
         cancel.run();
+        cancelFull.run();
         shown = null;
         view = null;
         display.showTitle(TITLE);
@@ -348,13 +361,16 @@ public final class ViewerController<I> {
     private void showCurrent() {
         requestStart = timing.now();
         timingPending = true;
+        cancelFull.run();   // the full image of the previous one is no longer wanted
+        cancelFull = () -> { };
+        fullRequested = false;
         Path file = images.current();
         display.showTitle(title(file.getFileName().toString(), images.position(), images.size(), 0, 0, 0, false));
         // The new request is current before loading starts, so a result that arrives at once is accepted and a
         // late one for the previous image is ignored.
         long id = ++request;
         Runnable previous = cancel;
-        cancel = source.load(file, result -> loaded(id, file, result));
+        cancel = source.load(file, resolutionForMode(), result -> loaded(id, file, result));
         previous.run();   // stop decoding an image no longer wanted (fast key presses)
     }
 
@@ -420,7 +436,7 @@ public final class ViewerController<I> {
 
     private void place(Zoom.View v) {
         view = v;
-        display.showImage(shown.image(), shown.orientation(), v);
+        display.showImage(shown, v);
         // While the next image is still loading, its own title (without size) stays.
         if (shownRequest == request) {
             Path file = images.current();
@@ -430,6 +446,42 @@ public final class ViewerController<I> {
                 timingPending = false;
                 timing.shown(file.getFileName().toString(), requestStart, shown.loadMillis());
             }
+            loadFullIfNeeded(file, v);
         }
+    }
+
+    /**
+     * #22: the zoom asks for more pixels than the screen-size copy on screen has, e.g. actual size or + / −: load the
+     * full image, once, for this image only. Until it arrives the copy stays, stretched.
+     */
+    private void loadFullIfNeeded(Path file, Zoom.View v) {
+        if (fullRequested || v.scale() <= shown.resolution() * FULL_RESOLUTION_SLACK) {
+            return;
+        }
+        fullRequested = true;
+        long id = request;
+        cancelFull = source.load(file, 1, result -> fullLoaded(id, file, result));
+    }
+
+    /**
+     * What the zoom mode will need from a new image, known before its size is: actual size the full image, zoom lock
+     * its %; the fit modes nothing beyond the screen. Asking at once avoids decoding the image twice.
+     */
+    private double resolutionForMode() {
+        return switch (settings.zoomMode()) {
+            case ACTUAL -> 1;
+            case LOCK -> Math.min(1, settings.zoomPercent() / 100);
+            default -> 0;
+        };
+    }
+
+    /** The full image replaces the copy in the same place; a late one or a failure keeps what is shown. */
+    private void fullLoaded(long id, Path file, Loaded<I> result) {
+        if (id != request || shownRequest != id || shown == null || result.isFailed()) {
+            return;
+        }
+        shown = shown.withImage(result);
+        timing.full(file.getFileName().toString(), result.loadMillis());
+        display.showImage(shown, view);
     }
 }

@@ -8,6 +8,7 @@ import java.util.Locale;
 
 import javafx.application.Application;
 import javafx.beans.InvalidationListener;
+import javafx.geometry.Dimension2D;
 import javafx.scene.Scene;
 import javafx.scene.image.Image;
 import javafx.scene.input.KeyEvent;
@@ -16,7 +17,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import linview.image.ImageLoader;
-import linview.image.Orientation;
+import linview.image.Loaded;
 import linview.settings.Settings;
 import linview.settings.SettingsStore;
 import linview.ui.Keys;
@@ -48,7 +49,7 @@ public class App extends Application {
 
     private Stage stage;
     private ViewerController<Image> controller;
-    private final ImageLoader loader = new ImageLoader();
+    private ImageLoader loader;
     private TimingLog timing = TimingLog.OFF;
     private SettingsStore store;
     private Settings settings;
@@ -64,6 +65,8 @@ public class App extends Application {
     @Override
     public void start(Stage stage) {
         this.stage = stage;
+        Dimension2D screen = WindowPlacement.largestScreenPixels();
+        loader = new ImageLoader(screen.getWidth(), screen.getHeight());
         List<String> args = new ArrayList<>(getParameters().getRaw());
         if (args.remove(TIMING_FLAG)) {
             timing = TimingLog.toStandardError();
@@ -73,8 +76,8 @@ public class App extends Application {
         ViewerPane viewer = new ViewerPane();
         controller = new ViewerController<>(settings, store, loader::load, new ViewerController.Display<>() {
             @Override
-            public void showImage(Image image, Orientation orientation, Zoom.View view) {
-                viewer.show(image, orientation, view);
+            public void showImage(Loaded<Image> image, Zoom.View view) {
+                viewer.show(image, view);
             }
 
             @Override
@@ -174,7 +177,9 @@ public class App extends Application {
 
     @Override
     public void stop() {
-        loader.close();
+        if (loader != null) {
+            loader.close();
+        }
         store.close();   // writes a change still pending
     }
 

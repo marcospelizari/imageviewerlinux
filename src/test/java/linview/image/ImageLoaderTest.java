@@ -45,4 +45,38 @@ class ImageLoaderTest {
         assertEquals("tga", ImageLoader.extension(Path.of("earth.tar.tga")));
         assertEquals("", ImageLoader.extension(Path.of("noextension")));
     }
+
+    /** #19: just enough to cover a 1920×1080 screen upright, in both directions; never enlarged. */
+    @Test
+    void screenScaleCoversTheScreenUpright() {
+        assertEquals(0.32, ImageLoader.screenScale(6000, 4000, Orientation.UPRIGHT, 1920, 1080), 1e-9);
+        // Stored landscape, shown upright as portrait (EXIF 6): 4000 wide must still cover 1920.
+        assertEquals(0.48, ImageLoader.screenScale(6000, 4000, Orientation.of(6), 1920, 1080), 1e-9);
+        // A panorama covers the screen height: 10751 → 1080.
+        assertEquals(1080.0 / 10751, ImageLoader.screenScale(29437, 10751, Orientation.UPRIGHT, 1920, 1080), 1e-9);
+        assertEquals(1, ImageLoader.screenScale(1200, 1800, Orientation.UPRIGHT, 1920, 1080));
+        assertEquals(1, ImageLoader.screenScale(400, 300, Orientation.UPRIGHT, 1920, 1080));
+    }
+
+    /** ImageIO keeps every n-th pixel; the copy is never smaller than the screen needs. */
+    @Test
+    void subsamplingNeverGoesBelowTheScale() {
+        assertEquals(1, ImageLoader.subsampling(1));
+        assertEquals(1, ImageLoader.subsampling(0.6));
+        assertEquals(2, ImageLoader.subsampling(0.5));
+        assertEquals(3, ImageLoader.subsampling(0.32));
+        assertEquals(4, ImageLoader.subsampling(0.25));
+        assertEquals(9, ImageLoader.subsampling(1080.0 / 10751));
+    }
+
+    /** Normal photos load whole, as before; only very large images get a screen-size copy. */
+    @Test
+    void onlyVeryLargeImagesAreShrunk() {
+        assertEquals(1, ImageLoader.decodeScale(6000, 4000, Orientation.UPRIGHT, 0, 1920, 1080));   // 24 MP
+        assertEquals(1, ImageLoader.decodeScale(7745, 5164, Orientation.UPRIGHT, 0, 1920, 1080));   // ≈ 40 MP
+        assertEquals(1920.0 / 17869, ImageLoader.decodeScale(17869, 12802, Orientation.UPRIGHT, 0, 1920, 1080), 1e-9);
+        // The zoom mode can ask for more: zoom lock at 50 %, actual size.
+        assertEquals(0.5, ImageLoader.decodeScale(17869, 12802, Orientation.UPRIGHT, 0.5, 1920, 1080));
+        assertEquals(1, ImageLoader.decodeScale(17869, 12802, Orientation.UPRIGHT, 1, 1920, 1080));
+    }
 }
