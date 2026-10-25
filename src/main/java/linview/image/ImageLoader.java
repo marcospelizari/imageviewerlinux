@@ -2,10 +2,7 @@ package linview.image;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.attribute.BasicFileAttributes;
-import java.nio.file.attribute.FileTime;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -78,19 +75,6 @@ public final class ImageLoader {
 
     private static final System.Logger LOG = System.getLogger("linview");
 
-    /** A file's modified time and size; {@code null} from {@link #of} when it can't be read (e.g. deleted). */
-    private record Stamp(FileTime modified, long size) {
-
-        static Stamp of(Path file) {
-            try {
-                BasicFileAttributes attributes = Files.readAttributes(file, BasicFileAttributes.class);
-                return new Stamp(attributes.lastModifiedTime(), attributes.size());
-            } catch (IOException e) {
-                return null;
-            }
-        }
-    }
-
     private final double screenWidth;
     private final double screenHeight;
     /** Decodes the selected image; preloads have their own thread, so they never queue in front of it. */
@@ -154,7 +138,7 @@ public final class ImageLoader {
     private static Runnable stampOn(ExecutorService lane, Path file, Consumer<Object> done) {
         AtomicBoolean cancelled = new AtomicBoolean();
         Future<?> task = lane.submit(() -> {
-            Stamp stamp = Stamp.of(file);
+            FileStamp stamp = FileStamp.of(file);
             Platform.runLater(() -> {
                 if (!cancelled.get()) {
                     done.accept(stamp);
@@ -223,7 +207,7 @@ public final class ImageLoader {
     private void decodeSteps(Path file, String extension, double minResolution, boolean preload, long start,
                              AtomicBoolean cancelled, Runnable[] cancelJavaFX, AtomicReference<Future<?>> task,
                              BiConsumer<Loaded<Image>, Object> done) {
-        Stamp stamp = Stamp.of(file);
+        FileStamp stamp = FileStamp.of(file);
         ImageHeader header = ImageHeader.read(file);
         boolean imageIO = IMAGEIO_EXTENSIONS.contains(extension);
         if (imageIO) {   // metadata-extractor gives no size for these; the reader does, without decoding

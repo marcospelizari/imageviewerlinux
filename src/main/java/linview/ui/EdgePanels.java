@@ -81,13 +81,17 @@ final class EdgePanels {
         }
     }
 
-    /** Follows the mouse over the whole window, image and panels alike. */
+    /**
+     * Follows the mouse over the whole window, image and panels alike. Leaving the window, e.g. straight onto the
+     * other monitor, is like leaving the panels (#67).
+     */
     void watch(Scene scene) {
         scene.addEventFilter(MouseEvent.MOUSE_MOVED, e -> {
             if (stage.isFullScreen()) {
                 panels.forEach(panel -> panel.mouseAt(e.getSceneX(), e.getSceneY()));
             }
         });
+        scene.addEventHandler(MouseEvent.MOUSE_EXITED, e -> panels.forEach(Panel::mouseLeft));
     }
 
     private void pointerKept() {
@@ -147,6 +151,14 @@ final class EdgePanels {
                 }
             } else {
                 opening.stop();   // only passing the edge
+            }
+        }
+
+        /** Not opening; an open one closes as when the mouse moves off it, so typing still keeps it. */
+        void mouseLeft() {
+            opening.stop();
+            if (open && closing.getStatus() != Animation.Status.RUNNING) {
+                closing.playFromStart();
             }
         }
 
