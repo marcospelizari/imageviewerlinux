@@ -57,8 +57,8 @@ import linview.viewer.Zoom;
  * the mouse moves, so a click doesn't flash it.
  *
  * <p>Clicks (R-NAV-03, #62, as in FastStone): a left click on the right half goes to the next image, on the left half
- * to the previous one; it waits {@link #DOUBLE_CLICK} so a double-click (full-screen) wins. A drag or a hold is
- * not a click.
+ * to the previous one immediately. Every click navigates, including successive clicks; a drag or a loupe hold
+ * is not a click. Full-screen is controlled by the keyboard.
  */
 public final class ViewerPane extends StackPane {
 
@@ -81,11 +81,8 @@ public final class ViewerPane extends StackPane {
     private boolean magnifying;
     static final Duration LOUPE_DELAY = Duration.millis(200);
     private final PauseTransition loupeDelay = new PauseTransition(LOUPE_DELAY);
-    static final Duration DOUBLE_CLICK = Duration.millis(300);
-    private final PauseTransition clickDelay = new PauseTransition(DOUBLE_CLICK);
     private Runnable previous = () -> { };
     private Runnable next = () -> { };
-    private Runnable doubleClick = () -> { };
     /** The loupe was shown during this press, so its release isn't a click. */
     private boolean loupeShown;
     private double loupeX;
@@ -163,13 +160,9 @@ public final class ViewerPane extends StackPane {
             if (e.getButton() != MouseButton.PRIMARY || !e.isStillSincePress()) {
                 return;   // a drag (pan, loupe) is not a click
             }
-            if (e.getClickCount() == 2) {
-                clickDelay.stop();   // the first click's navigation never happens
-                doubleClick.run();
-            } else if (e.getClickCount() == 1 && !loupeShown) {
+            if (!loupeShown) {
                 Runnable go = e.getX() < getWidth() / 2 ? previous : next;
-                clickDelay.setOnFinished(f -> go.run());
-                clickDelay.playFromStart();
+                go.run();
             }
         });
         setOnMouseMoved(e -> pointerMoved());
@@ -307,11 +300,10 @@ public final class ViewerPane extends StackPane {
         }
     }
 
-    /** What a click does: previous image, next image, and a double-click (#62). */
-    void onClicks(Runnable previous, Runnable next, Runnable doubleClick) {
+    /** What a click does: previous image or next image, immediately (#62). */
+    void onClicks(Runnable previous, Runnable next) {
         this.previous = previous;
         this.next = next;
-        this.doubleClick = doubleClick;
     }
 
     private void startLoupe() {

@@ -50,7 +50,7 @@ final class ThumbStrip extends ListView<Path> {
         setCellFactory(list -> new Thumb(select));
         // The list's own selection and focus would take ← → from the viewer: clicks are handled by the cells.
         addEventFilter(MouseEvent.MOUSE_PRESSED, MouseEvent::consume);
-        addEventHandler(MouseEvent.MOUSE_CLICKED, MouseEvent::consume);   // a double-click here isn't full-screen
+        addEventHandler(MouseEvent.MOUSE_CLICKED, MouseEvent::consume);   // a click here never reaches the image
         addEventFilter(ScrollEvent.SCROLL, e -> {
             VirtualFlow<?> flow = (VirtualFlow<?>) lookup(".virtual-flow");
             if (flow != null) {
