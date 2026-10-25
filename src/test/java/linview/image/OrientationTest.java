@@ -64,4 +64,22 @@ class OrientationTest {
         assertArrayEquals(new int[] {6, 3, 5, 2, 4, 1}, Orientation.of(7).turn(stored, 3, 2));   // transverse
         assertArrayEquals(new int[] {3, 6, 2, 5, 1, 4}, Orientation.of(8).turn(stored, 3, 2));   // 270 clockwise
     }
+
+    /** #60: the magnifier's cut-out reads each upright pixel from where {@code turn} took it, for every EXIF value. */
+    @Test
+    void storedIndexIsTheInverseOfTurn() {
+        int width = 3;
+        int height = 2;
+        int[] stored = {0, 1, 2, 3, 4, 5};
+        for (int exif = 1; exif <= 8; exif++) {
+            Orientation orientation = Orientation.of(exif);
+            int[] upright = orientation.turn(stored, width, height);
+            int uprightWidth = orientation.swapsSides() ? height : width;
+            for (int i = 0; i < upright.length; i++) {
+                int index = orientation.storedIndex(i % uprightWidth, i / uprightWidth, width, height);
+                assertEquals(upright[i], stored[index], "EXIF " + exif + ", pixel " + i);
+            }
+        }
+    }
+
 }

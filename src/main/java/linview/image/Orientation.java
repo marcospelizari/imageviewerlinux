@@ -36,6 +36,35 @@ public record Orientation(int degrees, boolean mirror) {
     }
 
     /**
+     * The inverse of {@link #turn} for one pixel: where pixel ({@code x}, {@code y}) of the upright image is in the
+     * stored {@code width} × {@code height} image, as {@code y * width + x}. Lets the magnifier read a small upright
+     * cut-out of a huge image without turning all of it (#60).
+     */
+    public int storedIndex(int x, int y, int width, int height) {
+        int mx;
+        int sy;
+        switch (degrees) {
+            case 90 -> {
+                sy = height - 1 - x;
+                mx = y;
+            }
+            case 180 -> {
+                mx = width - 1 - x;
+                sy = height - 1 - y;
+            }
+            case 270 -> {
+                sy = x;
+                mx = width - 1 - y;
+            }
+            default -> {
+                mx = x;
+                sy = y;
+            }
+        }
+        return sy * width + (mirror ? width - 1 - mx : mx);
+    }
+
+    /**
      * {@code pixels} ({@code width} × {@code height}, row by row) turned upright, e.g. for a thumbnail file, which
      * is stored upright (#28); {@link #swapsSides} says whether the result is {@code height} wide.
      */

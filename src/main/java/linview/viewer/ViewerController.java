@@ -68,6 +68,12 @@ public final class ViewerController<I> {
          */
         void showImage(Loaded<I> image, Zoom.View view);
 
+        /**
+         * The full image of the screen-size copy on screen, for the magnifier only (#60): while the copy is enough for
+         * the zoom the view keeps it, so a 300 MP image isn't drawn on every frame.
+         */
+        void showFullImage(I image);
+
         void showMessage(String text);
 
         void showTitle(String title);
@@ -128,6 +134,8 @@ public final class ViewerController<I> {
     /** The full-resolution load of the current image (#22), asked for at most once per image. */
     private Runnable cancelFull = () -> { };
     private boolean fullRequested;
+    /** That full image once loaded (#60): for the magnifier, and swapped in when a zoom needs more than the copy. */
+    private Loaded<I> full;
     /** The image on screen, and the load it came from; {@code null} when a message is shown. */
     private Loaded<I> shown;
     private long shownRequest;
@@ -483,6 +491,7 @@ public final class ViewerController<I> {
         cancelFull.run();   // the full image of the previous one is no longer wanted
         cancelFull = () -> { };
         fullRequested = false;
+        full = null;
         Path file = images.current();
         display.showTitle(title(file.getFileName().toString(), images.position(), images.size(), 0, 0, 0, false));
         display.showPosition(images.files(), images.position() - 1);
@@ -575,6 +584,9 @@ public final class ViewerController<I> {
 
     private void place(Zoom.View v) {
         view = v;
+        if (full != null && needsMoreThanShown(v)) {
+            shown = shown.withImage(full);   // kept for the magnifier until now (#60)
+        }
         display.showImage(shown, v);
         // While the next image is still loading, its own title (without size) stays.
         if (shownRequest == request) {
@@ -596,10 +608,13 @@ public final class ViewerController<I> {
      * full image, once, for this image only. Until it arrives the copy stays, stretched.
      */
     private void loadFullIfNeeded(Path file, Zoom.View v) {
-        if (v.scale() <= shown.resolution() * FULL_RESOLUTION_SLACK) {
-            return;
+        if (needsMoreThanShown(v)) {
+            loadFull(file);
         }
-        loadFull(file);
+    }
+
+    private boolean needsMoreThanShown(Zoom.View v) {
+        return v.scale() > shown.resolution() * FULL_RESOLUTION_SLACK;
     }
 
     /** The magnifier needs every pixel (#32): the full image of a screen-size copy, as a zoom past it would. */
@@ -631,9 +646,9 @@ public final class ViewerController<I> {
     }
 
     /**
-     * The full image replaces the copy in the same place; a late one or a failure keeps what is shown. One with
-     * another size or EXIF orientation is from a file replaced since (#65): it is laid out as a new image, with the
-     * R / L turns kept.
+     * The full image replaces the copy in the same place when the zoom needs it; else, asked for by the magnifier, it
+     * goes to the magnifier only (#60). A late one or a failure keeps what is shown. One with another size or EXIF
+     * orientation is from a file replaced since (#65): it is laid out as a new image, with the R / L turns kept.
      */
     private void fullLoaded(long id, Path file, Loaded<I> result) {
         if (id != request || shownRequest != id || shown == null || result.isFailed()) {
@@ -647,7 +662,12 @@ public final class ViewerController<I> {
             applyMode();
             return;
         }
-        shown = shown.withImage(result);
-        display.showImage(shown, view);
+        full = result;
+        if (view != null && needsMoreThanShown(view)) {
+            shown = shown.withImage(result);
+            display.showImage(shown, view);
+        } else {
+            display.showFullImage(result.image());
+        }
     }
 }
