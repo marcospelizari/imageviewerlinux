@@ -26,7 +26,7 @@ import javafx.scene.image.WritableImage;
  * Thumbnails for the strip (#28), on one background thread of its own, so the selected image and preloads never wait
  * for them. A valid thumbnail in the freedesktop cache ({@link ThumbnailCache}) is used as it is, else one is made,
  * turned upright and stored there for file managers too. The newest request goes first: the cells just scrolled into
- * view. An image whose decode would need more than {@link ImageLoader#PRELOAD_DECODE_LIMIT} gets none (#20). The
+ * view. An image whose decode would need more than {@link Decoding#PRELOAD_DECODE_LIMIT} gets none (#20). The
  * last {@link #KEPT} thumbnails (and "none" answers) stay in memory, used only while the file's modified time and size
  * are the same, checked on the thread (#66). Public methods are called on the JavaFX thread, and answer on it.
  */
@@ -156,10 +156,10 @@ public final class ThumbnailLoader {
 
     /** Decodes {@code file} small and turns it upright; {@code null} if it can't be, or would need too much memory. */
     private static Pixels make(Path file) throws IOException {
-        String extension = ImageLoader.extension(file);
+        String extension = Decoding.extension(file);
         ImageHeader header = ImageHeader.read(file);
         // JavaFX gives no pixels of an animated GIF; Java's own GIF reader gives its first frame.
-        Pixels stored = ImageLoader.IMAGEIO_EXTENSIONS.contains(extension) || extension.equals("gif")
+        Pixels stored = Decoding.IMAGEIO_EXTENSIONS.contains(extension) || extension.equals("gif")
                 ? decodeWithImageIO(file, extension) : decodeWithJavaFX(file, extension, header);
         if (stored == null) {
             return null;
@@ -172,8 +172,8 @@ public final class ThumbnailLoader {
 
     /** JavaFX decodes at full size before shrinking, so a huge image is skipped (#20). */
     private static Pixels decodeWithJavaFX(Path file, String extension, ImageHeader header) {
-        if (header.hasSize() && ImageLoader.decodeBytes(extension, header.width(), header.height(), 1, false)
-                > ImageLoader.PRELOAD_DECODE_LIMIT) {
+        if (header.hasSize() && Decoding.decodeBytes(extension, header.width(), header.height(), 1)
+                > Decoding.PRELOAD_DECODE_LIMIT) {
             return null;
         }
         int box = ThumbnailCache.LARGE;
@@ -204,11 +204,11 @@ public final class ThumbnailLoader {
             double width = reader.getWidth(0);
             double height = reader.getHeight(0);
             double scale = Math.min(1, ThumbnailCache.LARGE / Math.max(width, height));
-            if (ImageLoader.decodeBytes(extension, width, height, scale, false) > ImageLoader.PRELOAD_DECODE_LIMIT) {
+            int step = Decoding.subsampling(scale);
+            if (Decoding.decodeBytes(extension, width, height, step) > Decoding.PRELOAD_DECODE_LIMIT) {
                 return null;
             }
             ImageReadParam param = reader.getDefaultReadParam();
-            int step = ImageLoader.subsampling(scale);
             if (step > 1) {
                 param.setSourceSubsampling(step, step, 0, 0);
             }

@@ -5,8 +5,6 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Locale;
-import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -40,16 +38,14 @@ import javafx.scene.image.WritableImage;
  * size (R4), checked on the worker thread. Preloads ask for what the zoom mode needs, but never more than 40 MP
  * decoded, so huge neighbours stay bounded (#55). Kept images are a cache of {@link #CACHE_BUDGET_BYTES} (#20).
  *
- * <p>Decode memory (#20): what a decode needs is estimated from the header before it starts ({@link #decodeBytes}).
- * Above {@link #PRELOAD_DECODE_LIMIT} an image is not preloaded and its decode runs on a thread of its own, one at a
- * time: JavaFX can't stop a decode it has started, so this is what bounds them, and normal images never wait behind
- * one. Above {@link #DECODE_LIMIT} it is refused as {@link Loaded#tooLarge too large}, and so is a decode that runs
- * out of memory anyway. All public methods are called on the JavaFX thread.
+ * <p>Decode memory (#20): what a decode needs is estimated from the header before it starts
+ * ({@link Decoding#decodeBytes}). Above {@link Decoding#PRELOAD_DECODE_LIMIT} an image is not preloaded and its decode
+ * runs on a thread of its own, one at a time: JavaFX can't stop a decode it has started, so this is what bounds them,
+ * and normal images never wait behind one. Above {@link Decoding#DECODE_LIMIT} it is refused as
+ * {@link Loaded#tooLarge too large}, and so is a decode that runs out of memory anyway. All public methods are called
+ * on the JavaFX thread.
  */
 public final class ImageLoader {
-
-    /** Extensions decoded with ImageIO; everything else goes to JavaFX. */
-    static final Set<String> IMAGEIO_EXTENSIONS = Set.of("webp", "tif", "tiff", "psd", "tga");
 
     /**
      * Images up to this many pixels load whole: shrinking while loading costs JavaFX more CPU time than the graphics
@@ -61,18 +57,6 @@ public final class ImageLoader {
     /** How much decoded image the cache keeps, W×H×4 (decided 2026-10-24, REPORT.md §5.2). */
     static final long CACHE_BUDGET_BYTES = 300L << 20;
 
-    /** A decode needing more than this (≈ 100 MP JPEG) is not preloaded and runs one at a time (Marcos, #20). */
-    static final long PRELOAD_DECODE_LIMIT = 300L << 20;
-
-    /**
-     * A decode needing more than this is refused: the 2 GB heap ({@code -Xmx2g}) less the cache and a preload
-     * (Marcos, #20).
-     */
-    static final long DECODE_LIMIT = 1200L << 20;
-
-    /** The ImageIO path briefly holds the decoded image, its ARGB array and the JavaFX image (REPORT.md §6.8). */
-    private static final int IMAGEIO_BYTES_PER_PIXEL = 12;
-
     private static final System.Logger LOG = System.getLogger("linview");
 
     private final double screenWidth;
@@ -80,7 +64,7 @@ public final class ImageLoader {
     /** Decodes the selected image; preloads have their own thread, so they never queue in front of it. */
     private final ExecutorService worker = daemonThread("linview-decoder");
     private final ExecutorService preloader = daemonThread("linview-preloader");
-    /** Decodes above {@link #PRELOAD_DECODE_LIMIT}, one at a time. */
+    /** Decodes above {@link Decoding#PRELOAD_DECODE_LIMIT}, one at a time. */
     private final ExecutorService large = daemonThread("linview-large-decoder");
 
     /** Which image loads when, and the window of kept images (#21). */
@@ -158,7 +142,7 @@ public final class ImageLoader {
     private Runnable decodeOn(ExecutorService lane, Path file, double minResolution, boolean preload,
                               BiConsumer<Loaded<Image>, Object> done) {
         long start = System.nanoTime();
-        String extension = extension(file);
+        String extension = Decoding.extension(file);
         AtomicBoolean cancelled = new AtomicBoolean();
         Runnable[] cancelJavaFX = {() -> { }};   // only touched on the JavaFX thread
         AtomicReference<Future<?>> task = new AtomicReference<>();   // the large lane's, once moved there
@@ -209,20 +193,21 @@ public final class ImageLoader {
                              BiConsumer<Loaded<Image>, Object> done) {
         FileStamp stamp = FileStamp.of(file);
         ImageHeader header = ImageHeader.read(file);
-        boolean imageIO = IMAGEIO_EXTENSIONS.contains(extension);
+        boolean imageIO = Decoding.IMAGEIO_EXTENSIONS.contains(extension);
         if (imageIO) {   // metadata-extractor gives no size for these; the reader does, without decoding
             double[] size = imageIOSize(file, extension);
             header = new ImageHeader(header.orientation(), size[0], size[1]);
         }
         ImageHeader known = header;
         Orientation orientation = header.orientation();
-        long need = header.hasSize() ? decodeBytes(extension, header.width(), header.height(),
-                decodeScale(header.width(), header.height(), orientation, minResolution, preload), preload) : 0;
-        if (need > DECODE_LIMIT || preload && need > PRELOAD_DECODE_LIMIT) {
+        long need = header.hasSize() ? Decoding.decodeBytes(extension, header.width(), header.height(),
+                subsampling(decodeScale(header.width(), header.height(), orientation, minResolution, preload),
+                        header.width(), header.height(), preload)) : 0;
+        if (need > Decoding.DECODE_LIMIT || preload && need > Decoding.PRELOAD_DECODE_LIMIT) {
             answer(cancelled, done, Loaded.tooLarge(header.width(), header.height()), stamp);
             return;
         }
-        if (need > PRELOAD_DECODE_LIMIT) {
+        if (need > Decoding.PRELOAD_DECODE_LIMIT) {
             Runnable decodeLarge = imageIO
                     ? () -> answer(cancelled, done,
                             decode(file, extension, orientation, minResolution, false).timed(millisSince(start)), stamp)
@@ -245,20 +230,6 @@ public final class ImageLoader {
                 }
             });
         }
-    }
-
-    /**
-     * What decoding a {@code width} × {@code height} image (as stored) at {@code scale} needs (#20). JavaFX decodes
-     * a JPEG, PNG, GIF or BMP at full size whatever size is asked for (GC log, 2026-10-24): 3 bytes per pixel for a
-     * JPEG, 4 for the others. ImageIO decodes every n-th pixel, then holds three copies.
-     */
-    static long decodeBytes(String extension, double width, double height, double scale, boolean preload) {
-        if (IMAGEIO_EXTENSIONS.contains(extension)) {
-            int step = subsampling(scale, width, height, preload);
-            return (long) (Math.ceil(width / step) * Math.ceil(height / step) * IMAGEIO_BYTES_PER_PIXEL);
-        }
-        int bytesPerPixel = extension.equals("jpg") || extension.equals("jpeg") ? 3 : 4;
-        return (long) (width * height * bytesPerPixel);
     }
 
     /** The stored size from the ImageIO reader's header, without decoding; 0 × 0 when it can't be read. */
@@ -286,12 +257,6 @@ public final class ImageLoader {
         worker.shutdownNow();
         preloader.shutdownNow();
         large.shutdownNow();
-    }
-
-    static String extension(Path file) {
-        String name = file.getFileName().toString();
-        int dot = name.lastIndexOf('.');
-        return dot < 0 ? "" : name.substring(dot + 1).toLowerCase(Locale.ROOT);
     }
 
     /**
@@ -331,17 +296,12 @@ public final class ImageLoader {
         return Math.min(1, Math.sqrt(SHRINK_ABOVE_PIXELS / (width * height)));
     }
 
-    /** ImageIO keeps every {@code n}-th pixel: the largest {@code n} whose copy is still at least {@code scale}. */
-    static int subsampling(double scale) {
-        return Math.max(1, (int) Math.floor(1 / scale + 1e-9));
-    }
-
     /**
-     * {@link #subsampling}, raised for a preload until the decoded size (every n-th pixel, rounded up) is within
-     * {@link #SHRINK_ABOVE_PIXELS} (#57): one step too few gives 50 MP for a 200 MP TIFF.
+     * {@link Decoding#subsampling}, raised for a preload until the decoded size (every n-th pixel, rounded up) is
+     * within {@link #SHRINK_ABOVE_PIXELS} (#57): one step too few gives 50 MP for a 200 MP TIFF.
      */
     static int subsampling(double scale, double width, double height, boolean preload) {
-        int step = subsampling(scale);
+        int step = Decoding.subsampling(scale);
         while (preload && Math.ceil(width / step) * Math.ceil(height / step) > SHRINK_ABOVE_PIXELS) {
             step++;
         }
