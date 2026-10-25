@@ -185,6 +185,9 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
         chooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("Images", patterns));
         chooser.setInitialDirectory(controller.startFolder().toFile());
 
+        // Folders too, without a DirectoryChooser: in this (GTK) dialog a folder can be chosen and opened as well as
+        // an image. Checked by Marcos on 2026-10-23 (#50, closed without code; review finding R8 withdrawn), so no
+        // separate folder dialog or Ctrl+Shift+O is needed. Raised again in a review on 2026-10-25: still settled.
         File chosen = chooser.showOpenDialog(stage);
         if (chosen != null) {
             controller.open(chosen.toPath());
