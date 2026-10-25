@@ -142,6 +142,12 @@ public final class ViewerController<I> {
     private boolean wheelRestIsZoom;
     /** Where Ctrl+Shift+L returns to; fit after a restart with the lock on. */
     private Zoom.Mode modeBeforeLock = Zoom.Mode.FIT;
+    /**
+     * #63: an open with zoom lock on fits its first image and locks that %. {@code lockFromFit} waits for the first
+     * image shown; {@code lockFitRequest} is its load, which follows the fit (e.g. going full-screen) until left.
+     */
+    private boolean lockFromFit;
+    private long lockFitRequest = -1;
     private double viewWidth;
     private double viewHeight;
     /** When the current image was asked for, and whether it still has to be logged as shown (#23). */
@@ -200,12 +206,8 @@ public final class ViewerController<I> {
             nothingOpen(problem);
             return;
         }
-        // Each open starts unlocked, in the mode before the lock (fit by default): open, see it fit, lock that %
-        // (Marcos, 2026-10-24, #59). Also when the file says lock, e.g. closed while locked.
-        if (settings.zoomMode() == Zoom.Mode.LOCK) {
-            settings.setZoomMode(modeBeforeLock);
-            store.save(settings);
-        }
+        // The lock stays on; its % comes from the first image fitting the window (Marcos, 2026-10-25, #63).
+        lockFromFit = settings.zoomMode() == Zoom.Mode.LOCK;
         images = list;
         forward = true;
         if (images.isEmpty()) {
@@ -506,6 +508,10 @@ public final class ViewerController<I> {
         }
         shown = result;
         shownRequest = id;
+        if (lockFromFit) {
+            lockFromFit = false;
+            lockFitRequest = id;
+        }
         applyMode();
     }
 
@@ -518,7 +524,18 @@ public final class ViewerController<I> {
         }
         double w = shown.uprightWidth();
         double h = shown.uprightHeight();
-        double scale = Zoom.scale(settings.zoomMode(), settings.zoomPercent(), w, h, viewWidth, viewHeight);
+        double scale;
+        if (settings.zoomMode() == Zoom.Mode.LOCK && shownRequest == lockFitRequest) {
+            double percent = Math.max(Zoom.MIN_PERCENT, Math.min(Zoom.MAX_PERCENT,
+                    percentOf(Zoom.scale(Zoom.Mode.FIT, 0, w, h, viewWidth, viewHeight))));
+            if (settings.zoomPercent() != percent) {
+                settings.setZoomPercent(percent);
+                store.save(settings);
+            }
+            scale = percent / 100;
+        } else {
+            scale = Zoom.scale(settings.zoomMode(), settings.zoomPercent(), w, h, viewWidth, viewHeight);
+        }
         place(Zoom.start(scale, w, h, viewWidth, viewHeight));
     }
 
@@ -604,7 +621,7 @@ public final class ViewerController<I> {
     private double resolutionForMode() {
         return switch (settings.zoomMode()) {
             case ACTUAL -> 1;
-            case LOCK -> Math.min(1, settings.zoomPercent() / 100);
+            case LOCK -> lockFromFit ? 0 : Math.min(1, settings.zoomPercent() / 100);   // #63: fits first
             default -> 0;
         };
     }
