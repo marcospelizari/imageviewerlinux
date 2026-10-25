@@ -16,7 +16,7 @@ import javafx.stage.Stage;
 
 import linview.image.ImageLoader;
 import linview.image.Loaded;
-import linview.image.ThumbnailLoader;
+import linview.image.thumbnail.ThumbnailLoader;
 import linview.settings.Settings;
 import linview.settings.SettingsStore;
 import linview.ui.ViewerWindow;

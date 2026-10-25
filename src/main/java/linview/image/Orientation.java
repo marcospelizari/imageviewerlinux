@@ -39,7 +39,7 @@ public record Orientation(int degrees, boolean mirror) {
      * {@code pixels} ({@code width} × {@code height}, row by row) turned upright, e.g. for a thumbnail file, which
      * is stored upright (#28); {@link #swapsSides} says whether the result is {@code height} wide.
      */
-    int[] turn(int[] pixels, int width, int height) {
+    public int[] turn(int[] pixels, int width, int height) {
         int outWidth = swapsSides() ? height : width;
         int[] out = new int[pixels.length];
         for (int y = 0; y < height; y++) {
