@@ -13,7 +13,8 @@ public final class ImageResampler {
 
     /**
      * Larger decoded images are left to the graphics card: their buffers would be too large (#20). The same 40 MP as
-     * {@link ImageLoader#SHRINK_ABOVE_PIXELS}, but for its own reason: changing one doesn't change the other.
+     * the loader's {@code ImageLoader.SHRINK_ABOVE_PIXELS}, but for its own reason: changing one doesn't change the
+     * other.
      */
     public static final double MAX_SOURCE_PIXELS = 40e6;
 

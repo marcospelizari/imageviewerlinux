@@ -1,10 +1,13 @@
-package linview.image;
+package linview.image.loading;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
+
+import linview.image.ImageHeader;
+import linview.image.Orientation;
 
 /**
  * How large a copy to decode and how preloads stay bounded (#19, #55, #57). Decoding itself needs JavaFX and real
@@ -17,7 +20,7 @@ class ImageLoaderTest {
     void screenScaleCoversTheScreenUpright() {
         assertEquals(0.32, ImageLoader.screenScale(6000, 4000, Orientation.UPRIGHT, 1920, 1080), 1e-9);
         // Stored landscape, shown upright as portrait (EXIF 6): 4000 wide must still cover 1920.
-        assertEquals(0.48, ImageLoader.screenScale(6000, 4000, Orientation.of(6), 1920, 1080), 1e-9);
+        assertEquals(0.48, ImageLoader.screenScale(6000, 4000, new Orientation(90, false), 1920, 1080), 1e-9);
         // A panorama covers the screen height: 10751 → 1080.
         assertEquals(1080.0 / 10751, ImageLoader.screenScale(29437, 10751, Orientation.UPRIGHT, 1920, 1080), 1e-9);
         assertEquals(1, ImageLoader.screenScale(1200, 1800, Orientation.UPRIGHT, 1920, 1080));
@@ -101,7 +104,7 @@ class ImageLoaderTest {
                 new OutOfMemoryError("Java heap space")), header).isTooLarge());
         assertFalse(ImageLoader.failure(new java.io.IOException("No loader"), header).isTooLarge());
         assertTrue(ImageLoader.failure(new java.io.IOException("No loader"), header).isFailed());
-        assertFalse(ImageLoader.failure(new OutOfMemoryError(), ImageHeader.UNKNOWN).isTooLarge());
+        assertFalse(ImageLoader.failure(new OutOfMemoryError(), new ImageHeader(Orientation.UPRIGHT, 0, 0)).isTooLarge());
         assertTrue(ImageLoader.failure(null, header).isFailed());
     }
 }

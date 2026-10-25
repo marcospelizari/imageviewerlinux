@@ -1,4 +1,4 @@
-package linview.image;
+package linview.image.loading;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -23,6 +23,12 @@ import javafx.application.Platform;
 import javafx.scene.image.Image;
 import javafx.scene.image.PixelFormat;
 import javafx.scene.image.WritableImage;
+
+import linview.image.Decoding;
+import linview.image.FileStamp;
+import linview.image.ImageHeader;
+import linview.image.Loaded;
+import linview.image.Orientation;
 
 /**
  * Loads images in the background, which keeps the window responsive. The EXIF orientation and the file's real size

@@ -1,4 +1,4 @@
-package linview.image;
+package linview.image.loading;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -13,6 +13,9 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 import org.junit.jupiter.api.Test;
+
+import linview.image.Loaded;
+import linview.image.Orientation;
 
 /** #21: the selected image first, preloads one at a time, changed files; #20: the cache's budget. */
 class LoadSchedulerTest {
