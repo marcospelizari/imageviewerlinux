@@ -19,6 +19,7 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - The window code moved from `App` to `ui.ViewerWindow`: Stage and Scene, the Open dialog, full-screen and what the controller shows. Every action goes through its one entry point `execute(Keys.Action)`, which the taskbar, panels and menu will call too. `App` only builds, connects, starts and stops. No change in behaviour (#53)
 
 ### Fixed
+- The magnifier and the full-screen taskbar no longer lag on huge images (229 / 317 MP): the full image the magnifier needs no longer replaces the screen-size copy in the view while that copy is enough for the zoom, and the magnifier draws only a small upright cut-out around the mouse instead of the whole image. A zoom that needs the full image still gets it, without loading it again. Normal photos look the same (#60)
 - An image replaced by another program while linview shows it (before zooming in or using the magnifier) is no longer drawn with the old file's size and orientation: the new size and EXIF orientation are used, and an R / L turn is kept (#65)
 - The thumbnail strip shows a new thumbnail after an image is edited or repaired: thumbnails kept in memory are used only while the file's modified time and size are unchanged, checked on the thumbnail thread (#66)
 - In full-screen, a thumbnail strip or taskbar that is open closes when the mouse leaves the window straight onto another monitor; it still stays open while you type a zoom % (#67)

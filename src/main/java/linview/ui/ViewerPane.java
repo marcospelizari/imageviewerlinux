@@ -15,6 +15,8 @@ import javafx.scene.effect.DropShadow;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelFormat;
+import javafx.scene.image.PixelReader;
+import javafx.scene.image.PixelWriter;
 import javafx.scene.image.WritableImage;
 import javafx.scene.input.MouseButton;
 import javafx.scene.input.ScrollEvent;
@@ -77,6 +79,8 @@ public final class ViewerPane extends StackPane {
     private final Pane lens = new Pane(lensTurned);
     /** What is on screen, for the loupe; {@code null} while a message is shown. */
     private Loaded<Image> shownLoaded;
+    /** The full image of the screen-size copy on screen, for the loupe only (#60); {@code null} when none. */
+    private Image loupeSource;
     private Zoom.View shownView;
     private boolean magnifying;
     static final Duration LOUPE_DELAY = Duration.millis(200);
@@ -274,6 +278,9 @@ public final class ViewerPane extends StackPane {
     public void show(Loaded<Image> loaded, Zoom.View v) {
         Image image = loaded.image();
         Orientation orientation = loaded.orientation();
+        if (shownLoaded == null || image != shownLoaded.image()) {
+            loupeSource = null;   // another image, or the full one now on screen
+        }
         message.setText("");
         // ImageView scales before it rotates, both around its centre: mirror first, then rotate, as EXIF defines.
         view.setScaleX(orientation.mirror() ? -1 : 1);
@@ -300,6 +307,14 @@ public final class ViewerPane extends StackPane {
         }
     }
 
+    /** The full image of the copy on screen, for the loupe (#60); the view keeps the copy. */
+    void showFullImage(Image image) {
+        loupeSource = image;
+        if (magnifying) {
+            showLoupe(loupeX, loupeY);
+        }
+    }
+
     /** What a click does: previous image or next image, immediately (#62). */
     void onClicks(Runnable previous, Runnable next) {
         this.previous = previous;
@@ -323,7 +338,11 @@ public final class ViewerPane extends StackPane {
         lensView.setImage(null);
     }
 
-    /** The loupe centred on ({@code x}, {@code y}), showing the image point under it. */
+    /**
+     * The loupe centred on ({@code x}, {@code y}), showing the image point under it. It draws only an upright cut-out
+     * of the decoded image around that point, a few hundred pixels, rebuilt on each move: drawing all of a 300 MP
+     * image on every frame made it lag (#60).
+     */
     private void showLoupe(double x, double y) {
         loupeX = x;
         loupeY = y;
@@ -332,17 +351,20 @@ public final class ViewerPane extends StackPane {
         if (loaded == null || v == null) {
             return;
         }
-        Orientation orientation = loaded.orientation();
-        lensView.setImage(loaded.image());   // the decoded image, never the shrunk sharp copy
-        lensView.setScaleX(orientation.mirror() ? -1 : 1);
-        lensView.setRotate(orientation.degrees());
-        double perPixel = LOUPE_ZOOM / scale;   // JavaFX pixels per image pixel
-        lensView.setFitWidth(loaded.width() * perPixel);
-        lensView.setFitHeight(loaded.height() * perPixel);
-        // The image point under the mouse, in upright image pixels.
-        double imageX = (x * scale - Math.round(v.x())) / v.scale();
-        double imageY = (y * scale - Math.round(v.y())) / v.scale();
-        lensTurned.relocate(x - imageX * perPixel, y - imageY * perPixel);
+        // The decoded image, never the shrunk sharp copy; its pixels per real pixel.
+        Image source = loupeSource != null ? loupeSource : loaded.image();
+        double resolution = source.getWidth() / loaded.width();
+        double perSource = LOUPE_ZOOM / scale / resolution;   // JavaFX pixels per decoded pixel
+        // The point under the mouse, in upright decoded pixels.
+        double sourceX = (x * scale - Math.round(v.x())) / v.scale() * resolution;
+        double sourceY = (y * scale - Math.round(v.y())) / v.scale() * resolution;
+        int size = (int) Math.ceil(2 * LOUPE_RADIUS / perSource) + 2;
+        int left = (int) Math.floor(sourceX) - size / 2;
+        int top = (int) Math.floor(sourceY) - size / 2;
+        lensView.setImage(uprightCut(source, loaded.orientation(), left, top, size));
+        lensView.setFitWidth(size * perSource);
+        lensView.setFitHeight(size * perSource);
+        lensTurned.relocate(x - (sourceX - left) * perSource, y - (sourceY - top) * perSource);
         lensClip.setCenterX(x);
         lensClip.setCenterY(y);
         lensRing.setCenterX(x);
@@ -351,9 +373,31 @@ public final class ViewerPane extends StackPane {
         lensRing.setVisible(true);
     }
 
+    /**
+     * The {@code size} × {@code size} square at ({@code left}, {@code top}) of {@code image} turned upright with
+     * {@code orientation}; transparent outside the image.
+     */
+    private static WritableImage uprightCut(Image image, Orientation orientation, int left, int top, int size) {
+        PixelReader reader = image.getPixelReader();
+        int width = (int) image.getWidth();
+        int height = (int) image.getHeight();
+        int uprightWidth = orientation.swapsSides() ? height : width;
+        int uprightHeight = orientation.swapsSides() ? width : height;
+        WritableImage cut = new WritableImage(size, size);
+        PixelWriter writer = cut.getPixelWriter();
+        for (int y = Math.max(0, -top); y < size && top + y < uprightHeight; y++) {
+            for (int x = Math.max(0, -left); x < size && left + x < uprightWidth; x++) {
+                int stored = orientation.storedIndex(left + x, top + y, width, height);
+                writer.setArgb(x, y, reader.getArgb(stored % width, stored / width));
+            }
+        }
+        return cut;
+    }
+
     public void showMessage(String text) {
         stopRedraw();
         shownLoaded = null;
+        loupeSource = null;
         shownView = null;
         hideLoupe();
         view.setImage(null);

@@ -57,6 +57,7 @@ class ViewerControllerTest {
     private Loaded<String> immediately;
     private final List<String> warnings = new ArrayList<>();
     private String shownImage;
+    private String fullImageForLoupe;
     private Zoom.View shownView;
     private Orientation shownOrientation;
     private String message;
@@ -120,6 +121,11 @@ class ViewerControllerTest {
                         shownView = view;
                         shownOrientation = image.orientation();
                         message = null;
+                    }
+
+                    @Override
+                    public void showFullImage(String image) {
+                        fullImageForLoupe = image;
                     }
 
                     @Override
@@ -409,6 +415,24 @@ class ViewerControllerTest {
         lastLoad().finish(800, 600);
         controller.loadFullResolution();
         assertEquals(3, loads.size());
+    }
+
+    /**
+     * #60: the full image asked for by the magnifier goes to the magnifier only; the view keeps the copy until a zoom
+     * needs more, then swaps it in without loading again.
+     */
+    @Test
+    void theMagnifiersFullImageStaysOutOfTheViewUntilAZoomNeedsIt() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160, 0.5);   // fit: 50%, the copy is enough
+        controller.loadFullResolution();
+        lastLoad().finish(3840, 2160, 1);
+        assertEquals("a.jpg full", fullImageForLoupe);
+        assertEquals("a.jpg copy", shownImage);
+
+        controller.setZoomMode(Zoom.Mode.ACTUAL);
+        assertEquals("a.jpg full", shownImage);
+        assertEquals(2, loads.size());
     }
 
     /** The full image belongs to one image: moving on cancels it, and a late one is ignored. */

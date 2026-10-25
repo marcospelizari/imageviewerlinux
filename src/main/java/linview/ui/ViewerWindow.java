@@ -199,6 +199,11 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
     }
 
     @Override
+    public void showFullImage(Image image) {
+        viewer.showFullImage(image);
+    }
+
+    @Override
     public void showMessage(String text) {
         viewer.showMessage(text);
     }
