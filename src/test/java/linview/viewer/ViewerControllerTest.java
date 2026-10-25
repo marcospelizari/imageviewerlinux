@@ -456,6 +456,23 @@ class ViewerControllerTest {
         assertEquals(2, loads.size());   // the rotation asked for nothing new
     }
 
+    /** #65: the file was replaced before its full image loaded: laid out with the new size and EXIF, R / L kept. */
+    @Test
+    void aFullImageOfAReplacedFileIsLaidOutAsNew() {
+        controller.open(folder);
+        lastLoad().finish(10000, 5000, 0.2);
+        controller.setZoomMode(Zoom.Mode.ACTUAL);
+        Pending full = lastLoad();
+        controller.rotateRight();
+
+        full.done().accept(new Loaded<>("a.jpg new", 3000, 4000, new Orientation(90, false)));
+
+        assertEquals("a.jpg new", shownImage);
+        assertEquals(new Orientation(180, false), shownOrientation);   // the new EXIF, turned once more
+        assertTrue(title.contains("3000×4000 — 100%"), title);
+        assertEquals(2, loads.size());   // the new full image is used, not loaded again
+    }
+
     @Test
     void timingLogsTheFullImage() {
         controller.open(folder);

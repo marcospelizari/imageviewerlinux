@@ -131,6 +131,8 @@ public final class ViewerController<I> {
     /** The image on screen, and the load it came from; {@code null} when a message is shown. */
     private Loaded<I> shown;
     private long shownRequest;
+    /** R / L turns of the image on screen, on top of its EXIF orientation: kept if its full image differs (#65). */
+    private int turns;
     private Zoom.View view;
     /** True after + / −: a resize keeps that zoom; the next image starts from the mode again (R-ZOOM-01). */
     private boolean zoomedByHand;
@@ -360,6 +362,7 @@ public final class ViewerController<I> {
             return;
         }
         shown = shown.rotated(quarterTurns);
+        turns += quarterTurns;
         applyMode();
     }
 
@@ -508,6 +511,7 @@ public final class ViewerController<I> {
         }
         shown = result;
         shownRequest = id;
+        turns = 0;
         if (lockFromFit) {
             lockFromFit = false;
             lockFitRequest = id;
@@ -626,13 +630,24 @@ public final class ViewerController<I> {
         };
     }
 
-    /** The full image replaces the copy in the same place; a late one or a failure keeps what is shown. */
+    /**
+     * The full image replaces the copy in the same place; a late one or a failure keeps what is shown. One with
+     * another size or EXIF orientation is from a file replaced since (#65): it is laid out as a new image, with the
+     * R / L turns kept.
+     */
     private void fullLoaded(long id, Path file, Loaded<I> result) {
         if (id != request || shownRequest != id || shown == null || result.isFailed()) {
             return;
         }
-        shown = shown.withImage(result);
         timing.full(file.getFileName().toString(), result.loadMillis());
+        Loaded<I> asLoaded = shown.rotated(-turns);
+        if (result.width() != asLoaded.width() || result.height() != asLoaded.height()
+                || !result.orientation().equals(asLoaded.orientation())) {
+            shown = result.rotated(turns);
+            applyMode();
+            return;
+        }
+        shown = shown.withImage(result);
         display.showImage(shown, view);
     }
 }

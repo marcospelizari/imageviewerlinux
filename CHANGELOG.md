@@ -18,6 +18,11 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - Zoom lock stays on across opens: when an image or folder is opened (at start, with Ctrl+O or from the file manager) with zoom lock on, the first image fits the window and the lock takes that %, so the next images open at it; no need to press Lock again. Until you move to another image, the first one keeps following the window (e.g. going full-screen at start). Only Lock or Ctrl+Shift+L turn it off. Replaces #59's "each open starts unlocked" (Marcos's decision, #59, #63)
 - The window code moved from `App` to `ui.ViewerWindow`: Stage and Scene, the Open dialog, full-screen and what the controller shows. Every action goes through its one entry point `execute(Keys.Action)`, which the taskbar, panels and menu will call too. `App` only builds, connects, starts and stops. No change in behaviour (#53)
 
+### Fixed
+- An image replaced by another program while linview shows it (before zooming in or using the magnifier) is no longer drawn with the old file's size and orientation: the new size and EXIF orientation are used, and an R / L turn is kept (#65)
+- The thumbnail strip shows a new thumbnail after an image is edited or repaired: thumbnails kept in memory are used only while the file's modified time and size are unchanged, checked on the thumbnail thread (#66)
+- In full-screen, a thumbnail strip or taskbar that is open closes when the mouse leaves the window straight onto another monitor; it still stays open while you type a zoom % (#67)
+
 ## [0.2.0] - 2026-10-24 - Phase 3
 ### Added
 - Sharp shrinking: when an image is shown smaller than its pixels (fit on most photos, zoom below 100 %), it is redrawn with Lanczos-3 in the background 150 ms after the last change and swapped in, one pixel per screen pixel, instead of the graphics card's grainy scaling. The first view still appears at once, zooming never waits, and dragging keeps the sharp copy. Our own resampler spread over the CPU cores (≈ 100 ms for 7.2 MP → 1080p; TwelveMonkeys' `ResampleOp` took 1–2 s). Not for animated GIFs or images decoded over 40 MP (#24)

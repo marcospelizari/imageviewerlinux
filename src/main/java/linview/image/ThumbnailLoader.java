@@ -3,16 +3,12 @@ package linview.image;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.LinkedBlockingDeque;
 import java.util.function.Consumer;
 
@@ -31,7 +27,8 @@ import javafx.scene.image.WritableImage;
  * for them. A valid thumbnail in the freedesktop cache ({@link ThumbnailCache}) is used as it is, else one is made,
  * turned upright and stored there for file managers too. The newest request goes first: the cells just scrolled into
  * view. An image whose decode would need more than {@link ImageLoader#PRELOAD_DECODE_LIMIT} gets none (#20). The
- * last {@link #KEPT} thumbnails stay in memory. Public methods are called on the JavaFX thread, and answer on it.
+ * last {@link #KEPT} thumbnails (and "none" answers) stay in memory, used only while the file's modified time and size
+ * are the same, checked on the thread (#66). Public methods are called on the JavaFX thread, and answer on it.
  */
 public final class ThumbnailLoader {
 
@@ -42,10 +39,8 @@ public final class ThumbnailLoader {
 
     private final ThumbnailCache cache;
     private final LinkedBlockingDeque<Path> queue = new LinkedBlockingDeque<>();
-    /** Least recently used first. */
-    private final Map<Path, Image> kept = new LinkedHashMap<>(16, 0.75f, true);
-    /** Images that have no thumbnail (damaged, or too large to decode for one); they get {@code null}. */
-    private final Set<Path> none = new HashSet<>();
+    /** On the thread only; {@code null} for an image with no thumbnail (damaged, or too large to decode for one). */
+    private final StampedCache<Image> kept = new StampedCache<>(KEPT);
     private final Map<Path, List<Consumer<Image>>> waiting = new HashMap<>();
     private final Thread worker;
 
@@ -63,11 +58,6 @@ public final class ThumbnailLoader {
 
     /** Calls {@code done} with the upright thumbnail of {@code file}, or {@code null} if it has none. */
     public void request(Path file, Consumer<Image> done) {
-        Image ready = kept.get(file);
-        if (ready != null || none.contains(file)) {
-            done.accept(ready);
-            return;
-        }
         List<Consumer<Image>> callers = waiting.get(file);
         if (callers != null) {
             callers.add(done);
@@ -98,38 +88,44 @@ public final class ThumbnailLoader {
             } catch (InterruptedException e) {
                 return;
             }
-            Image thumbnail = null;
-            try {
-                thumbnail = thumbnailOf(file);
-            } catch (IOException | RuntimeException | OutOfMemoryError e) {
-                LOG.log(System.Logger.Level.DEBUG, "No thumbnail for " + file + ": " + e);
-            }
-            Image result = thumbnail;
+            Image result = thumbnailFor(file);
             Platform.runLater(() -> answer(file, result));
         }
     }
 
-    private void answer(Path file, Image thumbnail) {
-        if (thumbnail != null) {
-            kept.put(file, thumbnail);
-            Iterator<Path> oldest = kept.keySet().iterator();
-            while (kept.size() > KEPT) {
-                oldest.next();
-                oldest.remove();
-            }
-        } else {
-            none.add(file);
+    /** On the thread: the one kept while the file is unchanged, else a new one; {@code null} if it has none. */
+    private Image thumbnailFor(Path file) {
+        FileStamp stamp = FileStamp.of(file);
+        if (stamp == null) {
+            return null;   // deleted or unreadable: nothing to keep
         }
+        StampedCache.Entry<Image> entry = kept.get(file);
+        if (entry != null && entry.isFor(stamp)) {
+            return entry.value();
+        }
+        Image thumbnail = null;
+        try {
+            // A file changed since its thumbnail was made: the cache's MTime is in whole seconds, so its thumbnail
+            // may be the old one from the same second; make it again (and store it for file managers too).
+            thumbnail = thumbnailOf(file, stamp, entry == null);
+        } catch (IOException | RuntimeException | OutOfMemoryError e) {
+            LOG.log(System.Logger.Level.DEBUG, "No thumbnail for " + file + ": " + e);
+        }
+        kept.put(file, stamp, thumbnail);
+        return thumbnail;
+    }
+
+    private void answer(Path file, Image thumbnail) {
         List<Consumer<Image>> callers = waiting.remove(file);
         if (callers != null) {
             callers.forEach(done -> done.accept(thumbnail));
         }
     }
 
-    /** On the worker thread: from the cache, else made and stored. */
-    private Image thumbnailOf(Path file) throws IOException {
-        long modified = Files.getLastModifiedTime(file).toMillis() / 1000;
-        Path cached = cache.find(file, modified);
+    /** On the worker thread: from the cache if {@code fromCache}, else made and stored. */
+    private Image thumbnailOf(Path file, FileStamp stamp, boolean fromCache) throws IOException {
+        long modified = stamp.modified().toMillis() / 1000;
+        Path cached = fromCache ? cache.find(file, modified) : null;
         if (cached != null) {
             Image image = new Image(cached.toUri().toString(), false);
             if (!image.isError()) {
