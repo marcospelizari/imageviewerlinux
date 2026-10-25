@@ -5,9 +5,10 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * What decoding an image file takes, the same for the viewer's images ({@link ImageLoader}) and the thumbnails
- * ({@link linview.image.thumbnail.ThumbnailLoader}): which decoder reads it (R-FMT-02), how much memory a decode
- * needs and the limits on that (#20), and ImageIO's subsampling. No JavaFX, so it can be tested without a screen.
+ * What decoding an image file takes, the same for the viewer's images
+ * ({@link linview.image.loading.ImageLoader}) and the thumbnails ({@link linview.image.thumbnail.ThumbnailLoader}):
+ * which decoder reads it (R-FMT-02), how much memory a decode needs and the limits on that (#20), and ImageIO's
+ * subsampling. No JavaFX, so it can be tested without a screen.
  */
 public final class Decoding {
 

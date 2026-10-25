@@ -1,4 +1,4 @@
-package linview.image;
+package linview.image.loading;
 
 import java.nio.file.Path;
 import java.util.HashSet;
@@ -9,6 +9,8 @@ import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+
+import linview.image.Loaded;
 
 /**
  * Which image loads when (#21): the selected image first, then the preloads one at a time, and the cache of kept

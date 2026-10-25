@@ -14,7 +14,7 @@ import javafx.geometry.Dimension2D;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
-import linview.image.ImageLoader;
+import linview.image.loading.ImageLoader;
 import linview.image.Loaded;
 import linview.image.thumbnail.ThumbnailLoader;
 import linview.settings.Settings;
