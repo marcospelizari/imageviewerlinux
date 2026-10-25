@@ -1,14 +1,16 @@
-package linview.image;
+package linview.image.thumbnail;
 
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import linview.image.FileStamp;
+
 /**
  * What was made from each file, with the {@link FileStamp} it was made at: used only while the file still has it
- * (#66); the least recently used go once there are more than {@code limit}. A value may be {@code null}, e.g. "this file has no thumbnail".
- * For one thread only. {@code V} is the value type (JavaFX {@code Image} in the app), so it can be tested without
- * starting JavaFX.
+ * (#66); the least recently used go once there are more than {@code limit}. A value may be {@code null}, e.g. "this
+ * file has no thumbnail". For one thread only. {@code V} is the value type (JavaFX {@code Image} in the app), so it
+ * can be tested without starting JavaFX.
  */
 final class StampedCache<V> {
 

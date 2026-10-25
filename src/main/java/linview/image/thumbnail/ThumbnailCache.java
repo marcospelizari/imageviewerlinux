@@ -1,4 +1,4 @@
-package linview.image;
+package linview.image.thumbnail;
 
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;

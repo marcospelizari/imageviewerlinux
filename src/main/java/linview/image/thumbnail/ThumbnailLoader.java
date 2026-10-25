@@ -1,4 +1,4 @@
-package linview.image;
+package linview.image.thumbnail;
 
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
@@ -21,6 +21,12 @@ import javafx.application.Platform;
 import javafx.scene.image.Image;
 import javafx.scene.image.PixelFormat;
 import javafx.scene.image.WritableImage;
+
+import linview.image.Decoding;
+import linview.image.FileStamp;
+import linview.image.ImageHeader;
+import linview.image.ImageResampler;
+import linview.image.Orientation;
 
 /**
  * Thumbnails for the strip (#28), on one background thread of its own, so the selected image and preloads never wait

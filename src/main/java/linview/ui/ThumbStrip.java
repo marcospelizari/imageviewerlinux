@@ -18,7 +18,7 @@ import javafx.scene.input.MouseButton;
 import javafx.scene.input.MouseEvent;
 import javafx.scene.input.ScrollEvent;
 
-import linview.image.ThumbnailLoader;
+import linview.image.thumbnail.ThumbnailLoader;
 
 /**
  * The full-screen top panel (R-FS-03, #28): the open folder's thumbnails in a row, the selected image highlighted

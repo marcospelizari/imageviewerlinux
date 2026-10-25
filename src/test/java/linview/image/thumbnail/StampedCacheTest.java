@@ -1,4 +1,4 @@
-package linview.image;
+package linview.image.thumbnail;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -12,6 +12,8 @@ import java.nio.file.attribute.FileTime;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
+import linview.image.FileStamp;
 
 class StampedCacheTest {
 

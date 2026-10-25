@@ -22,7 +22,7 @@ import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import linview.image.Loaded;
-import linview.image.ThumbnailLoader;
+import linview.image.thumbnail.ThumbnailLoader;
 import linview.settings.Settings;
 import linview.viewer.ImageList;
 import linview.viewer.ViewerController;

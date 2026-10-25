@@ -20,11 +20,11 @@ import com.drew.metadata.png.PngDirectory;
  * @param width  the stored width; 0 when the header doesn't say (the image then loads whole)
  * @param height the stored height; 0 likewise
  */
-record ImageHeader(Orientation orientation, double width, double height) {
+public record ImageHeader(Orientation orientation, double width, double height) {
 
     static final ImageHeader UNKNOWN = new ImageHeader(Orientation.UPRIGHT, 0, 0);
 
-    boolean hasSize() {
+    public boolean hasSize() {
         return width > 0 && height > 0;
     }
 
@@ -32,7 +32,7 @@ record ImageHeader(Orientation orientation, double width, double height) {
      * Reads {@code file}'s header. No EXIF, a broken tag, a format without EXIF or an unreadable file all give
      * {@link Orientation#UPRIGHT}; a size it can't find gives 0.
      */
-    static ImageHeader read(Path file) {
+    public static ImageHeader read(Path file) {
         Metadata metadata;
         try {
             metadata = ImageMetadataReader.readMetadata(file.toFile());
