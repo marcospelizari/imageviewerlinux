@@ -11,8 +11,11 @@ import java.util.stream.IntStream;
  */
 public final class ImageResampler {
 
-    /** Larger decoded images are left to the graphics card: their buffers would be too large (#20). */
-    public static final double MAX_SOURCE_PIXELS = ImageLoader.SHRINK_ABOVE_PIXELS;
+    /**
+     * Larger decoded images are left to the graphics card: their buffers would be too large (#20). The same 40 MP as
+     * {@link ImageLoader#SHRINK_ABOVE_PIXELS}, but for its own reason: changing one doesn't change the other.
+     */
+    public static final double MAX_SOURCE_PIXELS = 40e6;
 
     private static final int LOBES = 3;
 

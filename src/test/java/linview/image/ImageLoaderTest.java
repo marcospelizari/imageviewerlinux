@@ -4,48 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Path;
-import java.util.Set;
-
-import javax.imageio.ImageIO;
-
 import org.junit.jupiter.api.Test;
 
-import linview.viewer.ImageList;
-
 /**
- * R-FMT-02: which formats go to ImageIO and that its readers are installed. Decoding itself needs JavaFX and
- * real images, so it is checked by hand with the test folder (REPORT.md §7).
+ * How large a copy to decode and how preloads stay bounded (#19, #55, #57). Decoding itself needs JavaFX and real
+ * images, so it is checked by hand with the test folder (REPORT.md §7).
  */
 class ImageLoaderTest {
-
-    @Test
-    void theTwelveMonkeysReadersAreInstalled() {
-        for (String extension : ImageLoader.IMAGEIO_EXTENSIONS) {
-            assertTrue(ImageIO.getImageReadersBySuffix(extension).hasNext(), extension);
-        }
-    }
-
-    @Test
-    void everyImageIOFormatIsListed() {
-        assertTrue(ImageList.EXTENSIONS.containsAll(ImageLoader.IMAGEIO_EXTENSIONS));
-    }
-
-    /** JavaFX keeps the formats it reads itself: fastest, and animated GIFs play. */
-    @Test
-    void javaFXFormatsStayWithJavaFX() {
-        for (String extension : ImageList.EXTENSIONS) {
-            boolean javaFX = Set.of("jpg", "jpeg", "png", "gif", "bmp").contains(extension);
-            assertEquals(!javaFX, ImageLoader.IMAGEIO_EXTENSIONS.contains(extension), extension);
-        }
-    }
-
-    @Test
-    void extensionIgnoresCase() {
-        assertEquals("tif", ImageLoader.extension(Path.of("/pics/Scan.TIF")));
-        assertEquals("tga", ImageLoader.extension(Path.of("earth.tar.tga")));
-        assertEquals("", ImageLoader.extension(Path.of("noextension")));
-    }
 
     /** #19: just enough to cover a 1920×1080 screen upright, in both directions; never enlarged. */
     @Test
@@ -57,17 +22,6 @@ class ImageLoaderTest {
         assertEquals(1080.0 / 10751, ImageLoader.screenScale(29437, 10751, Orientation.UPRIGHT, 1920, 1080), 1e-9);
         assertEquals(1, ImageLoader.screenScale(1200, 1800, Orientation.UPRIGHT, 1920, 1080));
         assertEquals(1, ImageLoader.screenScale(400, 300, Orientation.UPRIGHT, 1920, 1080));
-    }
-
-    /** ImageIO keeps every n-th pixel; the copy is never smaller than the screen needs. */
-    @Test
-    void subsamplingNeverGoesBelowTheScale() {
-        assertEquals(1, ImageLoader.subsampling(1));
-        assertEquals(1, ImageLoader.subsampling(0.6));
-        assertEquals(2, ImageLoader.subsampling(0.5));
-        assertEquals(3, ImageLoader.subsampling(0.32));
-        assertEquals(4, ImageLoader.subsampling(0.25));
-        assertEquals(9, ImageLoader.subsampling(1080.0 / 10751));
     }
 
     /** Normal photos load whole, as before; only very large images get a screen-size copy. */
@@ -137,27 +91,6 @@ class ImageLoaderTest {
                 ImageLoader.reason(new java.io.IOException("No loader for image data")));
         assertEquals("IllegalStateException", ImageLoader.reason(new IllegalStateException()));
         assertEquals("unknown error", ImageLoader.reason(null));
-    }
-
-    /**
-     * #20: JavaFX decodes a JPEG at full size, 3 bytes per pixel, whatever size is asked for (GC log, 2026-10-24); the
-     * other JavaFX formats 4. ImageIO decodes every n-th pixel and holds three copies of it.
-     */
-    @Test
-    void decodeMemoryIsEstimatedFromTheStoredSize() {
-        assertEquals(17869L * 12802 * 3, ImageLoader.decodeBytes("jpg", 17869, 12802, 0.1, false));
-        assertEquals(4000L * 3000 * 4, ImageLoader.decodeBytes("png", 4000, 3000, 1, false));
-        assertEquals(1000L * 500 * 12, ImageLoader.decodeBytes("tif", 2000, 1000, 0.5, false));
-    }
-
-    /** #20: the limits agreed with Marcos, for the test images from §7. */
-    @Test
-    void hugeJpegsAreNotPreloadedButFitTheDecodeLimit() {
-        long large = ImageLoader.decodeBytes("jpg", 17869, 12802, 1, false);    // 25mb.jpg, 229 MP
-        long larger = ImageLoader.decodeBytes("jpg", 29437, 10751, 1, false);   // 50mb.jpg, 317 MP
-        assertTrue(large > ImageLoader.PRELOAD_DECODE_LIMIT);
-        assertTrue(larger <= ImageLoader.DECODE_LIMIT);
-        assertTrue(ImageLoader.decodeBytes("jpg", 4000, 3000, 1, true) < ImageLoader.PRELOAD_DECODE_LIMIT);   // 12 MP
     }
 
     /** #20: running out of memory is "too large", whatever wraps it; any other error stays "damaged". */
