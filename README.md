@@ -91,13 +91,13 @@ so new windows open on the monitor with the mouse pointer.
 | ← PgUp Backspace | Previous image |
 | Home / End | First / last image |
 | Ctrl+O or O | Open an image |
-| Enter, F11 or double-click | Full-screen on/off |
+| Enter or F11 | Full-screen on/off |
 | Esc | Quit, also from full-screen (the next start is in full-screen then) |
 | + / − | Zoom in / out (keypad too) |
 | Mouse wheel | Scroll the image, or next/previous image (`wheel` setting) |
 | Ctrl + mouse wheel | Zoom in / out at the mouse pointer |
 | Drag (left button) | Move an image larger than the window |
-| Click (left button) | Right half: next image; left half: previous image |
+| Click (left button) | Immediately: right half next image; left half previous image (each click) |
 | Hold left button | Magnifier (twice actual size) when the image fits the window |
 | B | Fit to window |
 | W | Fit width |

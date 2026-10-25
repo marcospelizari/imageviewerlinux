@@ -104,9 +104,8 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
         scene.getStylesheets().add(ViewerWindow.class.getResource("/linview/viewer.css").toExternalForm());
         panels.watch(scene);
         scene.setOnKeyPressed(this::keyPressed);
-        // A double-click toggles full-screen; a click on the image's left / right half goes back / on (#62).
-        viewer.onClicks(() -> execute(Keys.Action.PREVIOUS), () -> execute(Keys.Action.NEXT),
-                () -> execute(Keys.Action.FULL_SCREEN));
+        // A click on the image's left / right half goes back / on immediately (#62).
+        viewer.onClicks(() -> execute(Keys.Action.PREVIOUS), () -> execute(Keys.Action.NEXT));
 
         stage.setFullScreenExitHint("");
         stage.setFullScreenExitKeyCombination(KeyCombination.NO_MATCH);   // Esc quits, also from full-screen (#26)
@@ -159,7 +158,7 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
             case FIRST -> controller.first();
             case LAST -> controller.last();
             case OPEN -> chooseAndOpen();
-            case FULL_SCREEN -> stage.setFullScreen(!stage.isFullScreen());   // Enter, F11, double-click (R-VIEW-02)
+            case FULL_SCREEN -> stage.setFullScreen(!stage.isFullScreen());   // Enter, F11 (R-VIEW-02)
             case ZOOM_IN -> controller.zoomIn();
             case ZOOM_OUT -> controller.zoomOut();
             case FIT -> controller.setZoomMode(Zoom.Mode.FIT);
