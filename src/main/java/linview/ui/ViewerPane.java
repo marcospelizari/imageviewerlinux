@@ -341,7 +341,8 @@ public final class ViewerPane extends StackPane {
     /**
      * The loupe centred on ({@code x}, {@code y}), showing the image point under it. It draws only an upright cut-out
      * of the decoded image around that point, a few hundred pixels, rebuilt on each move: drawing all of a 300 MP
-     * image on every frame made it lag (#60).
+     * image on every frame made it lag (#60). JavaFX gives no pixels of an animated GIF: it shows the whole image,
+     * turned, so the animation plays (GIFs are small).
      */
     private void showLoupe(double x, double y) {
         loupeX = x;
@@ -351,9 +352,26 @@ public final class ViewerPane extends StackPane {
         if (loaded == null || v == null) {
             return;
         }
-        // The decoded image, never the shrunk sharp copy; its pixels per real pixel.
+        // The decoded image, never the shrunk sharp copy.
         Image source = loupeSource != null ? loupeSource : loaded.image();
-        double resolution = source.getWidth() / loaded.width();
+        if (source.getPixelReader() == null) {
+            showWholeInLoupe(source, loaded, v, x, y);
+        } else {
+            showCutInLoupe(source, loaded, v, x, y);
+        }
+        lensClip.setCenterX(x);
+        lensClip.setCenterY(y);
+        lensRing.setCenterX(x);
+        lensRing.setCenterY(y);
+        lens.setVisible(true);
+        lensRing.setVisible(true);
+    }
+
+    /** An upright cut-out of {@code source} around the point under ({@code x}, {@code y}) (#60). */
+    private void showCutInLoupe(Image source, Loaded<Image> loaded, Zoom.View v, double x, double y) {
+        lensView.setScaleX(1);
+        lensView.setRotate(0);
+        double resolution = source.getWidth() / loaded.width();   // decoded pixels per real pixel
         double perSource = LOUPE_ZOOM / scale / resolution;   // JavaFX pixels per decoded pixel
         // The point under the mouse, in upright decoded pixels.
         double sourceX = (x * scale - Math.round(v.x())) / v.scale() * resolution;
@@ -365,12 +383,20 @@ public final class ViewerPane extends StackPane {
         lensView.setFitWidth(size * perSource);
         lensView.setFitHeight(size * perSource);
         lensTurned.relocate(x - (sourceX - left) * perSource, y - (sourceY - top) * perSource);
-        lensClip.setCenterX(x);
-        lensClip.setCenterY(y);
-        lensRing.setCenterX(x);
-        lensRing.setCenterY(y);
-        lens.setVisible(true);
-        lensRing.setVisible(true);
+    }
+
+    /** The loupe as before #60: the whole image, turned with its orientation, placed so the point is under it. */
+    private void showWholeInLoupe(Image source, Loaded<Image> loaded, Zoom.View v, double x, double y) {
+        Orientation orientation = loaded.orientation();
+        lensView.setImage(source);
+        lensView.setScaleX(orientation.mirror() ? -1 : 1);
+        lensView.setRotate(orientation.degrees());
+        double perPixel = LOUPE_ZOOM / scale;   // JavaFX pixels per image pixel
+        lensView.setFitWidth(loaded.width() * perPixel);
+        lensView.setFitHeight(loaded.height() * perPixel);
+        double imageX = (x * scale - Math.round(v.x())) / v.scale();
+        double imageY = (y * scale - Math.round(v.y())) / v.scale();
+        lensTurned.relocate(x - imageX * perPixel, y - imageY * perPixel);
     }
 
     /**

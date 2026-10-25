@@ -3,6 +3,8 @@
 All notable changes are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+## [0.3.0] - 2026-10-25 - Phase 4
 ### Added
 - Click to navigate, as in FastStone: a left click on the right half of the image goes to the next image, on the left half to the previous one. Navigation happens immediately on each click, including successive clicks; double-click no longer toggles full-screen (Enter / F11 still do; Marcos's decision, #64). The magnifier now appears after holding the button 0.2 s (or at once when moving), so a click doesn't flash it; clicks on the taskbar or thumbnail strip don't navigate (#62)
 - Install for your user: `./gradlew installLocal` copies the packaged app to `~/.local/share/linview`, adds linview to the app menu with its icon, and offers it in the file manager's "Open with" for its 8 formats (`packaging/linux/linview.desktop`); `./gradlew uninstallLocal` removes it. No root, nothing outside the home folder. It doesn't take over double-click; the README shows how to make it the default (#37)
@@ -17,12 +19,17 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 ### Changed
 - Zoom lock stays on across opens: when an image or folder is opened (at start, with Ctrl+O or from the file manager) with zoom lock on, the first image fits the window and the lock takes that %, so the next images open at it; no need to press Lock again. Until you move to another image, the first one keeps following the window (e.g. going full-screen at start). Only Lock or Ctrl+Shift+L turn it off. Replaces #59's "each open starts unlocked" (Marcos's decision, #59, #63)
 - The window code moved from `App` to `ui.ViewerWindow`: Stage and Scene, the Open dialog, full-screen and what the controller shows. Every action goes through its one entry point `execute(Keys.Action)`, which the taskbar, panels and menu will call too. `App` only builds, connects, starts and stops. No change in behaviour (#53)
+- The image code is split into packages: `linview.image` keeps the shared pieces (with a new `Decoding` owning format choice, decode memory and subsampling), loading moves to `image.loading`, thumbnails to `image.thumbnail`. No behaviour change (#68)
+- Version 0.3.0 in `build.gradle` for this release
 
 ### Fixed
 - The magnifier and the full-screen taskbar no longer lag on huge images (229 / 317 MP): the full image the magnifier needs no longer replaces the screen-size copy in the view while that copy is enough for the zoom, and the magnifier draws only a small upright cut-out around the mouse instead of the whole image. A zoom that needs the full image still gets it, without loading it again. Normal photos look the same (#60)
 - An image replaced by another program while linview shows it (before zooming in or using the magnifier) is no longer drawn with the old file's size and orientation: the new size and EXIF orientation are used, and an R / L turn is kept (#65)
 - The thumbnail strip shows a new thumbnail after an image is edited or repaired: thumbnails kept in memory are used only while the file's modified time and size are unchanged, checked on the thumbnail thread (#66)
 - In full-screen, a thumbnail strip or taskbar that is open closes when the mouse leaves the window straight onto another monitor; it still stays open while you type a zoom % (#67)
+
+### Known limits
+- Started from a Wayland app such as Dolphin or Konsole, linview can open on the monitor without the mouse (JavaFX's pointer position through XWayland is stale); planned for 1.0 (#58)
 
 ## [0.2.0] - 2026-10-24 - Phase 3
 ### Added

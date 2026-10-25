@@ -1,5 +1,6 @@
 package linview.image.thumbnail;
 
+import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferInt;
 import java.io.IOException;
@@ -223,7 +224,12 @@ public final class ThumbnailLoader {
             reader.dispose();
         }
         BufferedImage pre = new BufferedImage(decoded.getWidth(), decoded.getHeight(), BufferedImage.TYPE_INT_ARGB_PRE);
-        pre.createGraphics().drawImage(decoded, 0, 0, null);
+        Graphics2D graphics = pre.createGraphics();
+        try {
+            graphics.drawImage(decoded, 0, 0, null);
+        } finally {
+            graphics.dispose();
+        }
         int[] argb = ((DataBufferInt) pre.getRaster().getDataBuffer()).getData();
         double fit = Math.min(1, (double) ThumbnailCache.LARGE / Math.max(pre.getWidth(), pre.getHeight()));
         int toWidth = Math.max(1, (int) Math.round(pre.getWidth() * fit));
