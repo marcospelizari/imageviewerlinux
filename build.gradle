@@ -84,61 +84,42 @@ tasks.register('appImage', Exec) {
     } as CommandLineArgumentProvider)
 }
 
+// The release (#61): the app image, the .desktop file, the icons and install.sh, in build/release/linview-<version>/
+// and packed as linview-<version>-linux-x64.tar.gz. install.sh is the one installer: installLocal runs it too.
+def releaseName = "linview-${version}"
+def releaseDir = tasks.register('releaseDir', Sync) {
+    group = 'distribution'
+    description = 'Puts the app image, desktop file, icons and install.sh into build/release/linview-<version>.'
+    dependsOn 'appImage'
+    into layout.buildDirectory.dir("release/${releaseName}")
+    from(layout.buildDirectory.dir('jpackage/linview')) { into 'linview' }
+    from('packaging/linux') { include 'linview.desktop', 'install.sh' }
+    from('src/main/resources/linview/icons') { into 'icons' }
+}
+
+tasks.register('releaseArchive', Tar) {
+    group = 'distribution'
+    description = 'Packs the release into build/release/linview-<version>-linux-x64.tar.gz.'
+    from releaseDir
+    into releaseName   // one folder when unpacked
+    destinationDirectory = layout.buildDirectory.dir('release')
+    archiveFileName = "${releaseName}-linux-x64.tar.gz"
+    compression = Compression.GZIP
+    useFileSystemPermissions()   // keeps the start script, jspawnhelper and install.sh executable
+}
+
 // Desktop integration for this user (#37): no root, nothing outside the home folder, so it is safe on an
 // image-based system such as Bazzite. KDE runs the installed app on the host, with its bundled Java runtime.
-def dataHome = {
-    def xdg = System.getenv('XDG_DATA_HOME')
-    new File(xdg ? xdg : "${System.getProperty('user.home')}/.local/share")
-}
-def iconSizes = [16, 32, 48, 64, 128, 256, 512]
-
-tasks.register('installLocal') {
+tasks.register('installLocal', Exec) {
     group = 'distribution'
-    description = 'Installs the app image for this user: ~/.local/share/linview, the app menu entry, icons and "Open with".'
-    dependsOn 'appImage'
-    def image = layout.buildDirectory.dir('jpackage/linview')
-    def template = file('packaging/linux/linview.desktop')
-    def icons = file('src/main/resources/linview/icons')
-    doLast {
-        def data = dataHome()
-        def app = new File(data, 'linview')
-        project.delete(app)   // a new version replaces the old one completely
-        project.copy { from image; into app }
-        new File(app, 'bin/linview').setExecutable(true)
-        iconSizes.each { size ->
-            project.copy {
-                from new File(icons, "linview-${size}.png")
-                into new File(data, "icons/hicolor/${size}x${size}/apps")
-                rename { 'linview.png' }
-            }
-        }
-        def applications = new File(data, 'applications')
-        applications.mkdirs()
-        new File(applications, 'linview.desktop').text =
-                template.text.replace('@EXEC@', new File(app, 'bin/linview').absolutePath)
-        refreshDesktop(applications)
-        println "Installed in ${app}; \"Open with linview\" is in the file manager."
-    }
+    description = 'Installs the app for this user: ~/.local/share/linview, the app menu entry, icons and "Open with".'
+    dependsOn releaseDir
+    commandLine layout.buildDirectory.file("release/${releaseName}/install.sh").get().asFile.path
 }
 
-tasks.register('uninstallLocal') {
+tasks.register('uninstallLocal', Exec) {
     group = 'distribution'
     description = 'Removes what installLocal installed.'
-    doLast {
-        def data = dataHome()
-        project.delete(new File(data, 'linview'), new File(data, 'applications/linview.desktop'))
-        iconSizes.each { size -> project.delete(new File(data, "icons/hicolor/${size}x${size}/apps/linview.png")) }
-        refreshDesktop(new File(data, 'applications'))
-        println 'linview removed; images open with the system\'s other viewers again.'
-    }
-}
-
-/** Lets the desktop see the change at once; harmless if the tool is missing (e.g. inside a container). */
-def refreshDesktop(File applications) {
-    try {
-        ['update-desktop-database', applications.path].execute().waitFor()
-    } catch (IOException ignored) {
-        // The desktop rescans by itself, a little later.
-    }
+    commandLine file('packaging/linux/install.sh').path, '--uninstall'
 }
 

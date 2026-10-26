@@ -13,11 +13,13 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 
 - Keyboard shortcut list: F1, or Keyboard shortcuts… in the right-click menu, shows every key and mouse action (#36)
 - More FastStone keys: 2 (keypad too) zooms to 200%, and Shift + wheel zooms like Ctrl + wheel (#36)
+- Release archive for Linux: `./gradlew releaseArchive` builds `linview-<version>-linux-x64.tar.gz` with the app (its own Java runtime included), the menu entry, icons and `install.sh`, which installs for the user without root (`--uninstall` removes it). A `v*` tag makes CI check the tag against the version, build the archive, store it in the project's package registry and create a GitLab release linking it (#61)
 
 ### Changed
 - A file counts as changed also when only its change time differs, e.g. after a tool that keeps the modified date: the image cache and the thumbnails load it again (#51)
 - The arrow keys work as in FastStone: on an image larger than the window → ← ↓ ↑ scroll it by a wheel notch and stop at its edges; where it isn't wider, → / ← still go to the next / previous image. PgDn, Space, PgUp and Backspace always change the image (#36)
 - B no longer fits the image: A already switches between fit and actual size. Fit to window stays in the right-click menu and on the taskbar's Fit button (#36)
+- `installLocal` / `uninstallLocal` now run `install.sh`, the same installer as the release archive; what they install is unchanged (#61)
 
 ### Fixed
 - A turn made while a folder opened with Ctrl+O is still being listed (a slow USB disk) is no longer lost: linview asks about it (or saves it, as `rotation.save` says) before the new folder replaces the image (#69)
