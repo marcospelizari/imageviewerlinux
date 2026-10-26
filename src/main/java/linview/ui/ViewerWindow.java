@@ -1,12 +1,14 @@
 package linview.ui;
 
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
 import java.nio.file.Path;
 
+import javafx.application.Platform;
 import javafx.beans.InvalidationListener;
 import javafx.geometry.Dimension2D;
 import javafx.scene.Scene;
@@ -15,12 +17,16 @@ import javafx.scene.input.KeyCombination;
 import javafx.scene.input.KeyEvent;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.layout.StackPane;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
+import linview.files.FileActions;
 import linview.image.Loaded;
 import linview.image.thumbnail.ThumbnailLoader;
 import linview.settings.Settings;
@@ -46,12 +52,16 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
     /** The full-screen overlay (#45): {@code 2/16}, optionally with the file name. */
     private final Label overlay = new Label();
     private boolean taskbarOpen;
+    private final FileActions files;
+    /** A file is on its way to the Trash: Del waits for it, so the same file isn't sent twice (#34). */
+    private boolean trashing;
     private Settings settings;
     private ViewerController<Image> controller;
 
-    /** {@code thumbnails} fills the full-screen thumbnail strip (#28). */
-    public ViewerWindow(Stage stage, ThumbnailLoader thumbnails) {
+    /** {@code thumbnails} fills the full-screen thumbnail strip (#28); {@code files} does Del (#34). */
+    public ViewerWindow(Stage stage, ThumbnailLoader thumbnails, FileActions files) {
         this.stage = stage;
+        this.files = files;
         strip = new ThumbStrip(thumbnails, index -> controller.select(index));
         taskbar = new Taskbar(this::execute, percent -> controller.zoomToPercent(percent), () -> viewer.requestFocus());
         overlay.getStyleClass().add("overlay");
@@ -168,9 +178,53 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
             case ZOOM_LOCK -> controller.toggleZoomLock();
             case ROTATE_RIGHT -> controller.rotateRight();
             case ROTATE_LEFT -> controller.rotateLeft();
+            case DELETE -> trashCurrent();
             // Quits, also from full-screen, which the next start remembers (Marcos, 2026-10-24, #26).
             case ESCAPE -> stage.close();
         }
+    }
+
+    /**
+     * Del (R-FILE-01, #34): asks, then moves the file to the Trash off the JavaFX thread (slow drives); nothing while
+     * the next image is loading (review R7). Enter moves it, Esc cancels.
+     */
+    private void trashCurrent() {
+        Path target = controller.trashTarget();   // kept while asking: navigating can't change it (R7)
+        if (target == null || trashing) {
+            return;
+        }
+        ButtonType move = new ButtonType("Move to Trash", ButtonBar.ButtonData.OK_DONE);
+        Alert ask = new Alert(Alert.AlertType.CONFIRMATION, "Move " + target.getFileName() + " to the Trash?",
+                move, ButtonType.CANCEL);
+        ask.initOwner(stage);
+        ask.setTitle("Move to Trash");
+        ask.setHeaderText(null);
+        if (ask.showAndWait().orElse(ButtonType.CANCEL) != move) {
+            return;
+        }
+        trashing = true;
+        Thread.ofPlatform().name("linview-trash").daemon().start(() -> {
+            IOException failure = null;
+            try {
+                files.trash(target);
+            } catch (IOException e) {
+                failure = e;
+            }
+            IOException problem = failure;
+            Platform.runLater(() -> {
+                trashing = false;
+                if (problem == null) {
+                    controller.trashed(target);
+                } else {
+                    Alert error = new Alert(Alert.AlertType.ERROR, "Can't move " + target.getFileName()
+                            + " to the Trash:\n" + problem.getMessage() + "\n\nNothing was deleted.");
+                    error.initOwner(stage);
+                    error.setTitle("Move to Trash");
+                    error.setHeaderText(null);
+                    error.showAndWait();
+                }
+            });
+        });
     }
 
     /** Ctrl+O / O: pick an image or a folder; the image's folder becomes the list. */

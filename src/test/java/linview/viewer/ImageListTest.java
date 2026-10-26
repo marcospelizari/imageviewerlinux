@@ -29,6 +29,34 @@ class ImageListTest {
         return list;
     }
 
+    /** #34: a file moved to the Trash leaves the list; the position follows. */
+    @Test
+    void withoutTheCurrentImageMovesOnOrBack() throws IOException {
+        for (String name : List.of("a.jpg", "b.jpg", "c.jpg")) {
+            Files.createFile(folder.resolve(name));
+        }
+        ImageList list = ImageList.open(folder.resolve("b.jpg"));
+        ImageList rest = list.without(list.current());
+        assertEquals(List.of(folder.resolve("a.jpg"), folder.resolve("c.jpg")), rest.files());
+        assertEquals(folder.resolve("c.jpg"), rest.current());
+        ImageList last = rest.without(folder.resolve("c.jpg"));
+        assertEquals(folder.resolve("a.jpg"), last.current());
+        assertTrue(last.without(folder.resolve("a.jpg")).isEmpty());
+    }
+
+    @Test
+    void withoutAnotherImageKeepsTheCurrentOne() throws IOException {
+        for (String name : List.of("a.jpg", "b.jpg", "c.jpg")) {
+            Files.createFile(folder.resolve(name));
+        }
+        ImageList list = ImageList.open(folder.resolve("b.jpg"));
+        ImageList rest = list.without(folder.resolve("a.jpg"));
+        assertEquals(folder.resolve("b.jpg"), rest.current());
+        assertEquals(1, rest.position());
+        assertEquals(folder.resolve("b.jpg"), list.without(folder.resolve("c.jpg")).current());
+        assertSame(list, list.without(folder.resolve("other.jpg")));
+    }
+
     @Test
     void numbersSortByValue() {
         assertEquals(List.of("img1.jpg", "img2.jpg", "img10.jpg", "img100.jpg"),
