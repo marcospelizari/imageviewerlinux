@@ -108,11 +108,16 @@ so new windows open on the monitor with the mouse pointer.
 | Ctrl+Shift+L | Zoom lock on/off |
 | R / L | Rotate the view 90° right / left (saving to the file is asked when you leave the image) |
 | Del | Move to the Trash (asks first) |
+| F12 | Settings window (also the Settings button in the full-screen taskbar) |
 
 ## Settings
+Press F12 (or Settings in the full-screen taskbar) for the settings window: how images open (fit, fit width, fit
+height, actual size or zoom lock), the mouse wheel, the background colour, the full-screen overlay and saving turned
+images. OK applies the changes at once and saves them; Cancel or Esc drops them.
+
 Settings are kept in `~/.config/linview/settings.properties` (or `$XDG_CONFIG_HOME/linview/`).
 The file is optional: missing keys use the default, and an invalid value uses the default and logs a warning.
-Edit it while linview is closed. Most settings are used by features that are still being built.
+It can still be edited by hand while linview is closed.
 
 | Key | Values | Default |
 |---|---|---|

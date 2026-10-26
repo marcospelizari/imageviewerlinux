@@ -48,7 +48,8 @@ public class App extends Application {
     private ViewerController<Image> controller;
     private ImageLoader loader;
     private ThumbnailLoader thumbnails;
-    private ViewerWindow window;
+    /** Read by the settings writer thread when a save fails (#48). */
+    private volatile ViewerWindow window;
     /**
      * Lists folders off the JavaFX thread (#21). Two at a time, so one slow folder (USB, network) doesn't hold up the
      * next (#55); at most one more waits, and a newer open replaces it, so stalled folders can't pile up threads (#57).
@@ -62,8 +63,13 @@ public class App extends Application {
     /** Reads the settings on JavaFX's launcher thread, before the window exists: no file I/O on the UI thread (#52). */
     @Override
     public void init() {
-        store = new SettingsStore(SettingsStore.defaultFile(),
-                warning -> LOG.log(System.Logger.Level.WARNING, warning));
+        // Warnings while loading are only logged; a failed save once the window is up is also shown there (#48).
+        store = new SettingsStore(SettingsStore.defaultFile(), warning -> {
+            LOG.log(System.Logger.Level.WARNING, warning);
+            if (window != null && warning.startsWith("Can't save")) {
+                Platform.runLater(() -> window.settingsNotSaved(warning));
+            }
+        });
         settings = store.load();
     }
 

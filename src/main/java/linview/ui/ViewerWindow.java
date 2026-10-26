@@ -66,6 +66,11 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
      */
     private final ExecutorService fileWork = Executors.newSingleThreadExecutor(
             Thread.ofPlatform().name("linview-files").daemon().factory());
+    /** The thumbnail strip's folder and selection, to write the overlay again after a settings change (#48). */
+    private List<Path> shownFiles = List.of();
+    private int shownIndex = -1;
+    /** A failed settings save was reported in this run: once is enough (#48). */
+    private boolean settingsProblemShown;
     /** A file is on its way to the Trash: Del waits for it, so the same file isn't sent twice (#34). */
     private boolean trashing;
     private Settings settings;
@@ -112,13 +117,7 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
         });
         StackPane overlayLayer = new StackPane(overlay);
         overlayLayer.setMouseTransparent(true);
-        Settings.Corner corner = settings.overlayCorner();
-        StackPane.setAlignment(overlay, switch (corner) {
-            case BOTTOM_LEFT -> Pos.BOTTOM_LEFT;
-            case BOTTOM_RIGHT -> Pos.BOTTOM_RIGHT;
-            case TOP_LEFT -> Pos.TOP_LEFT;
-            case TOP_RIGHT -> Pos.TOP_RIGHT;
-        });
+        placeOverlay();
         StackPane.setMargin(overlay, new Insets(12, 16, 12, 16));
         stage.fullScreenProperty().addListener(obs -> updateOverlay());
         Dimension2D content = WindowPlacement.placeAtStart(stage, settings.windowX(), settings.windowY(),
@@ -146,6 +145,15 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
         if (settings.fullScreen()) {
             stage.setFullScreen(true);   // on the monitor the window just opened on
         }
+    }
+
+    private void placeOverlay() {
+        StackPane.setAlignment(overlay, switch (settings.overlayCorner()) {
+            case BOTTOM_LEFT -> Pos.BOTTOM_LEFT;
+            case BOTTOM_RIGHT -> Pos.BOTTOM_RIGHT;
+            case TOP_LEFT -> Pos.TOP_LEFT;
+            case TOP_RIGHT -> Pos.TOP_RIGHT;
+        });
     }
 
     /** Follows the window's place and size, except in full-screen, where they are the screen's. */
@@ -194,11 +202,40 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
             case ROTATE_RIGHT -> controller.rotateRight();
             case ROTATE_LEFT -> controller.rotateLeft();
             case DELETE -> trashCurrent();
+            case SETTINGS -> SettingsWindow.ask(stage, settings).ifPresent(this::apply);
             // Quits, also from full-screen, which the next start remembers (Marcos, 2026-10-24, #26).
             case ESCAPE -> {
                 controller.leaveImage();   // a turn may be saved first (#51)
                 stage.close();
             }
+        }
+    }
+
+    /**
+     * The settings window's OK (#48): the values go through the {@link Settings} setters, take effect on what is on
+     * screen at once, and are saved.
+     */
+    private void apply(SettingsWindow.Choices choices) {
+        settings.setWheel(choices.wheel());
+        if (choices.background() != null) {
+            settings.setBackground(choices.background());
+        }
+        settings.setCounterOverlay(choices.counter());
+        settings.setFileNameOverlay(choices.fileName());
+        settings.setOverlayCorner(choices.corner());
+        settings.setRotationSave(choices.rotationSave());
+        controller.saveSettings();
+        controller.chooseZoomMode(choices.openMode());
+        viewer.setBackgroundColour(settings.backgroundColour());
+        placeOverlay();
+        showPosition(shownFiles, shownIndex);
+    }
+
+    /** A settings save failed (R-SET-01): said once per run; the app keeps working and the old file stays. */
+    public void settingsNotSaved(String problem) {
+        if (!settingsProblemShown) {
+            settingsProblemShown = true;
+            showProblem("Settings", problem + "\n\nChanges apply until linview closes.");
         }
     }
 
@@ -371,6 +408,8 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
 
     @Override
     public void showPosition(List<Path> files, int index) {
+        shownFiles = files;
+        shownIndex = index;
         strip.show(files, index);
         overlay.setText(index < 0 ? "" : ViewerController.overlayText(files.get(index).getFileName().toString(),
                 index + 1, files.size(), settings.counterOverlay(), settings.fileNameOverlay()));

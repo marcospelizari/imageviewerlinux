@@ -319,6 +319,29 @@ public final class ViewerController<I> {
         }
     }
 
+    /**
+     * The open mode chosen in the settings window (#48): like the keys, and Lock like Ctrl+Shift+L, locking the % of
+     * the image on screen; with none shown, the next open fits its first image and locks that (#63).
+     */
+    public void chooseZoomMode(Zoom.Mode mode) {
+        if (mode != Zoom.Mode.LOCK) {
+            setZoomMode(mode);
+        } else if (settings.zoomMode() != Zoom.Mode.LOCK) {
+            if (view != null && canLayOut()) {
+                toggleZoomLock();
+            } else {
+                modeBeforeLock = settings.zoomMode();
+                settings.setZoomMode(Zoom.Mode.LOCK);
+                store.save(settings);
+            }
+        }
+    }
+
+    /** Saves preferences the window changed itself, e.g. in the settings window (#48). */
+    public void saveSettings() {
+        store.save(settings);
+    }
+
     /** A: fit to window ↔ actual size; from any other mode to actual size. */
     public void toggleFitOrActual() {
         setZoomMode(settings.zoomMode() == Zoom.Mode.ACTUAL ? Zoom.Mode.FIT : Zoom.Mode.ACTUAL);
