@@ -14,6 +14,7 @@ import javafx.geometry.Dimension2D;
 import javafx.scene.image.Image;
 import javafx.stage.Stage;
 
+import linview.files.FileActions;
 import linview.image.loading.ImageLoader;
 import linview.image.Loaded;
 import linview.image.thumbnail.ThumbnailLoader;
@@ -87,7 +88,7 @@ public class App extends Application {
             }
         };
         thumbnails = new ThumbnailLoader();
-        ViewerWindow window = new ViewerWindow(stage, thumbnails);
+        ViewerWindow window = new ViewerWindow(stage, thumbnails, new FileActions());
         controller = new ViewerController<>(settings, store, source, window, timing, folders, Platform::runLater);
         window.show(controller, settings);
 

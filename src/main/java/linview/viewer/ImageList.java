@@ -130,6 +130,21 @@ public final class ImageList {
         }
     }
 
+    /**
+     * The list without {@code file}, e.g. moved to the Trash (#34); this same list if it isn't in it. Removing the
+     * current image moves on to the next one, or to the previous one when it was the last.
+     */
+    ImageList without(Path file) {
+        int removed = files.indexOf(file);
+        if (removed < 0) {
+            return this;
+        }
+        List<Path> rest = new ArrayList<>(files);
+        rest.remove(removed);
+        int newIndex = removed < index ? index - 1 : Math.min(index, rest.size() - 1);
+        return new ImageList(folder, List.copyOf(rest), Math.max(newIndex, 0));
+    }
+
     /** The image at {@code newIndex} (0-based), clamped to the folder. */
     ImageList at(int newIndex) {
         int clamped = Math.max(0, Math.min(newIndex, files.size() - 1));

@@ -17,6 +17,11 @@ class KeysTest {
     }
 
     @Test
+    void deleteMovesToTheTrash() {
+        assertEquals(Action.DELETE, plain(KeyCode.DELETE));   // #34
+    }
+
+    @Test
     void nextKeys() {
         assertEquals(Action.NEXT, plain(KeyCode.RIGHT));
         assertEquals(Action.NEXT, plain(KeyCode.PAGE_DOWN));

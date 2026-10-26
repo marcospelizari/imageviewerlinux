@@ -3,6 +3,8 @@
 All notable changes are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+### Added
+- Del moves the image to the Trash: linview asks "Move … to the Trash?" (Enter moves it, Esc cancels), then shows the next image, or the previous one after the last; after the folder's only image it says the folder is empty. It works for a damaged file too, and does nothing while the next image is still loading, so it always takes the image the question names. The desktop's `gio trash` does the move, so a file on a USB drive goes to that drive's Trash and the file manager shows it. If the Trash can't take the file, or `gio` is missing, linview says why and the file stays: it never deletes permanently (#34)
 
 ## [0.3.0] - 2026-10-25 - Phase 4
 ### Added

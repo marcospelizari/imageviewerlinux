@@ -139,6 +139,8 @@ public final class ViewerController<I> {
     /** The image on screen, and the load it came from; {@code null} when a message is shown. */
     private Loaded<I> shown;
     private long shownRequest;
+    /** The load that failed with the message on screen; a damaged file can still be moved to the Trash (#34). */
+    private long failedRequest = -1;
     /** R / L turns of the image on screen, on top of its EXIF orientation: kept if its full image differs (#65). */
     private int turns;
     private Zoom.View view;
@@ -374,6 +376,52 @@ public final class ViewerController<I> {
         applyMode();
     }
 
+    /**
+     * The file Del moves to the Trash (R-FILE-01, #34): the selected image once its load has finished, shown or
+     * failed. {@code null} while the next image is still loading, because the one on screen is no longer the
+     * selected one (review R7), and when nothing is open. The window keeps this path while it asks, so navigating
+     * can't change the target.
+     */
+    public Path trashTarget() {
+        if (images == null || images.isEmpty()) {
+            return null;
+        }
+        boolean finished = shown != null && shownRequest == request || failedRequest == request;
+        return finished ? images.current() : null;
+    }
+
+    /**
+     * {@code file} was moved to the Trash: it leaves the folder. If it was the current image the next one is shown,
+     * or the previous one when it was the last; after the folder's only image, a message. A file of another folder
+     * (opened meanwhile) changes nothing.
+     */
+    public void trashed(Path file) {
+        if (images == null) {
+            return;
+        }
+        boolean wasCurrent = images.current().equals(file);
+        ImageList rest = images.without(file);
+        if (rest == images) {
+            return;
+        }
+        images = rest;
+        if (images.isEmpty()) {
+            nothingOpen("No images left in " + images.folder() + "\n\n" + OPEN_HINT);
+        } else if (wasCurrent) {
+            showCurrent();
+        } else {
+            // Moved on while the Trash was busy: only the position and the count change.
+            display.showPosition(images.files(), images.position() - 1);
+            if (view != null && shownRequest == request) {
+                place(view);
+            } else {
+                display.showTitle(title(images.current().getFileName().toString(), images.position(),
+                        images.size(), 0, 0, 0, false));
+            }
+            source.preload(images.upcoming(forward, PRELOAD_AHEAD, PRELOAD_BEHIND), resolutionForMode());
+        }
+    }
+
     /** Drag (R-ZOOM-05): moves the image by ({@code dx}, {@code dy}), only where it's larger than the window. */
     public void pan(double dx, double dy) {
         if (view == null || !canLayOut()) {
@@ -513,6 +561,7 @@ public final class ViewerController<I> {
             timing.failed(file.getFileName().toString(), requestStart);
             shown = null;
             view = null;
+            failedRequest = id;
             display.showMessage(result.isTooLarge()
                     ? "Can't show " + file.getFileName() + ": the image is too large (" + result.megapixels() + " MP)"
                     : "Can't show " + file.getFileName() + ": the file is damaged or not a supported image");

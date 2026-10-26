@@ -751,6 +751,80 @@ class ViewerControllerTest {
         assertNull(shownImage);
     }
 
+    /** #34, review R7: Del has a target only once the selected image has finished loading, shown or failed. */
+    @Test
+    void trashTargetWaitsForTheSelectedImage() {
+        assertNull(controller.trashTarget());
+        controller.open(folder);
+        assertNull(controller.trashTarget());
+        lastLoad().finish(800, 600);
+        assertEquals(folder.resolve("a.jpg"), controller.trashTarget());
+        controller.next();
+        assertNull(controller.trashTarget());   // a still on screen, b selected
+        lastLoad().done().accept(Loaded.failed());
+        assertEquals(folder.resolve("b.jpg"), controller.trashTarget());   // a damaged file can go too
+    }
+
+    @Test
+    void trashedCurrentImageShowsTheNextOne() {
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        controller.trashed(folder.resolve("a.jpg"));
+        assertEquals(List.of(folder.resolve("b.jpg"), folder.resolve("c.jpg")), stripFiles);
+        assertEquals(0, stripIndex);
+        assertEquals(folder.resolve("b.jpg"), lastLoad().file());
+        lastLoad().finish(800, 600);
+        assertEquals("b.jpg", shownImage);
+        assertTrue(title.startsWith("b.jpg — 1/2"), title);
+    }
+
+    @Test
+    void trashedLastImageShowsThePreviousOne() {
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        controller.last();
+        lastLoad().finish(800, 600);
+        controller.trashed(folder.resolve("c.jpg"));
+        assertEquals(folder.resolve("b.jpg"), lastLoad().file());
+        assertEquals(1, stripIndex);
+    }
+
+    @Test
+    void trashedOnlyImageLeavesAMessage() throws IOException {
+        Path single = Files.createDirectory(folder.resolve("single"));
+        Files.createFile(single.resolve("x.jpg"));
+        controller.open(single);
+        lastLoad().finish(800, 600);
+        controller.trashed(single.resolve("x.jpg"));
+        assertEquals("No images left in " + single + "\n\n" + ViewerController.OPEN_HINT, message);
+        assertEquals(List.of(), stripFiles);
+        assertNull(controller.trashTarget());
+    }
+
+    /** Moved on while the Trash was busy: the image on screen and its zoom stay, only n/N changes. */
+    @Test
+    void trashedEarlierImageKeepsTheOneShown() {
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        controller.next();
+        lastLoad().finish(800, 600);
+        int loadsBefore = loads.size();
+        controller.trashed(folder.resolve("a.jpg"));
+        assertEquals(loadsBefore, loads.size());
+        assertEquals("b.jpg", shownImage);
+        assertEquals(0, stripIndex);
+        assertTrue(title.startsWith("b.jpg — 1/2 — 800×600"), title);
+    }
+
+    @Test
+    void trashedFileOfAnotherFolderChangesNothing() {
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        controller.trashed(folder.resolve("elsewhere/a.jpg"));
+        assertEquals(3, stripFiles.size());
+        assertEquals("a.jpg", shownImage);
+    }
+
     /** #26: closing remembers the mode and the window; a window smaller than allowed is saved at the minimum. */
     @Test
     void closingRemembersTheModeAndTheWindow() throws IOException {
