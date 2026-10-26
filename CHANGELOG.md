@@ -9,6 +9,8 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 
 - Settings window (F12, or Settings in the full-screen taskbar): how images open (fit, fit width, fit height, actual size, or zoom lock, which locks the image on screen like Ctrl+Shift+L), the mouse wheel, the background colour (colour picker), the full-screen overlay (position, file name, corner) and what happens to turned images (`rotation.save`). One page; OK applies everything at once to the image on screen and saves it, Cancel or Esc drops the changes and doesn't leave full-screen. The settings file can still be edited by hand. If the settings can't be saved, linview says so once and keeps working (#48)
 
+- Right-click menu on the image, in a window and in full-screen: Open…, Fit to window, Fit width, Fit height, Actual size, Zoom lock (the current mode ticked), Rotate right / left, Full-screen (ticked when on), Move to Trash… and Settings…, each with its key. Each item does exactly what its key does. Items that need an image are greyed while none is shown, and Move to Trash also while the next image is loading. Fit height, which has no key, can be chosen here. Esc or a click outside closes the menu (that click doesn't also change the image). In full-screen the pointer no longer hides while the menu or a dialog (settings, a question) is open (#49)
+
 ### Changed
 - A file counts as changed also when only its change time differs, e.g. after a tool that keeps the modified date: the image cache and the thumbnails load it again (#51)
 

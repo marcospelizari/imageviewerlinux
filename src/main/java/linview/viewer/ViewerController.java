@@ -420,6 +420,11 @@ public final class ViewerController<I> {
         applyMode();
     }
 
+    /** True while the selected image is on screen, finished loading: what R / L and the lock act on (#49). */
+    public boolean isImageShown() {
+        return shown != null && shownRequest == request;
+    }
+
     /**
      * The file Del moves to the Trash (R-FILE-01, #34): the selected image once its load has finished, shown or
      * failed. {@code null} while the next image is still loading, because the one on screen is no longer the

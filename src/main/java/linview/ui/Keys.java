@@ -15,8 +15,10 @@ public final class Keys {
 
     public enum Action {
         NEXT, PREVIOUS, FIRST, LAST, OPEN, FULL_SCREEN, ESCAPE,
-        ZOOM_IN, ZOOM_OUT, FIT, FIT_WIDTH, ACTUAL_SIZE, FIT_OR_ACTUAL, ZOOM_LOCK, ROTATE_RIGHT, ROTATE_LEFT, DELETE, SETTINGS
+        ZOOM_IN, ZOOM_OUT, FIT, FIT_WIDTH, FIT_HEIGHT, ACTUAL_SIZE, FIT_OR_ACTUAL, ZOOM_LOCK, ROTATE_RIGHT, ROTATE_LEFT, DELETE, SETTINGS
     }
+
+    // FIT_HEIGHT has no key (Marcos, 2026-10-22): the menu (#49) and the settings window (#48) choose it.
 
     private record Key(KeyCode code, boolean ctrl, boolean shift) {
 

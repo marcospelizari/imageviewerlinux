@@ -774,6 +774,20 @@ class ViewerControllerTest {
         assertNull(shownImage);
     }
 
+    /** #49: the menu's image items are on only while the selected image is on screen. */
+    @Test
+    void imageShownOnlyOnceTheSelectedImageHasLoaded() {
+        assertFalse(controller.isImageShown());
+        controller.open(folder);
+        assertFalse(controller.isImageShown());
+        lastLoad().finish(800, 600);
+        assertTrue(controller.isImageShown());
+        controller.next();
+        assertFalse(controller.isImageShown());   // a still on screen, b selected (R7)
+        lastLoad().done().accept(Loaded.failed());
+        assertFalse(controller.isImageShown());
+    }
+
     /** #34, review R7: Del has a target only once the selected image has finished loading, shown or failed. */
     @Test
     void trashTargetWaitsForTheSelectedImage() {
