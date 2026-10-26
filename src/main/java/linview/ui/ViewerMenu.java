@@ -70,10 +70,6 @@ final class ViewerMenu {
         menu.show(anchor, screenX, screenY);
     }
 
-    void hide() {
-        menu.hide();
-    }
-
     /**
      * Closes the menu on a press anywhere in {@code scene} or when {@code window} loses focus to another one: the
      * menu's own auto-hide doesn't do it under XWayland (Marcos's check). That press, its release and its click go

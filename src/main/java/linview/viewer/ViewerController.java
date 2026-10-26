@@ -100,9 +100,10 @@ public final class ViewerController<I> {
 
         /**
          * Saves {@code quarterTurns} × 90° clockwise to {@code file}, which was shown with {@code stored}, its stored
-         * size {@code width} × {@code height} (#51): in the background, then {@link #rotationSaved} or a message.
+         * size {@code width} × {@code height} (#51), loaded at {@code stamp} (#69): in the background, then
+         * {@link #rotationSaved} or a message.
          */
-        void saveRotation(Path file, Orientation stored, double width, double height, int quarterTurns);
+        void saveRotation(Path file, Object stamp, Orientation stored, double width, double height, int quarterTurns);
     }
 
     /** The answer to "Save rotation?": save or not, and whether to do the same from now on without asking. */
@@ -234,6 +235,10 @@ public final class ViewerController<I> {
     private void opened(long id, ImageList list, String problem) {
         if (id != opening) {
             return;
+        }
+        leaveImage();   // a turn made while the folder was being listed (#69)
+        if (id != opening) {
+            return;   // another folder was opened during its question
         }
         if (problem != null) {
             nothingOpen(problem);
@@ -504,7 +509,7 @@ public final class ViewerController<I> {
             }
         }
         if (save) {
-            display.saveRotation(file, stored, shown.width(), shown.height(), quarterTurns);
+            display.saveRotation(file, shown.stamp(), stored, shown.width(), shown.height(), quarterTurns);
         }
     }
 

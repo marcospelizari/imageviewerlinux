@@ -337,11 +337,12 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
 
     /** Writes the turn on the file thread; stored thumbnails of the file are deleted so they are made again. */
     @Override
-    public void saveRotation(Path file, Orientation stored, double width, double height, int quarterTurns) {
+    public void saveRotation(Path file, Object stamp, Orientation stored, double width, double height,
+                             int quarterTurns) {
         fileWork.execute(() -> {
             IOException failure = null;
             try {
-                files.saveRotation(file, stored, width, height, quarterTurns);
+                files.saveRotation(file, stamp, stored, width, height, quarterTurns);
             } catch (IOException e) {
                 failure = e;
             }

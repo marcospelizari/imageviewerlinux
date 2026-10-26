@@ -76,15 +76,16 @@ public final class FileActions {
 
     /**
      * Saves a view rotation to {@code file} (R-FILE-03, #51): {@code quarterTurns} × 90° clockwise on top of
-     * {@code stored}, the orientation it was shown with, its stored size {@code width} × {@code height}. A JPEG gets
+     * {@code stored}, the orientation it was shown with, its stored size {@code width} × {@code height}, its
+     * {@link FileStamp} {@code shown} when it was loaded (#69): a file changed since is refused. A JPEG gets
      * only a new EXIF orientation tag, its image data untouched; a PNG or BMP is written again, lossless. The modified
      * date stays. Written to a temporary file next to it, then moved over it in one step.
      *
      * @throws IOException with a message for the user, e.g. the file changed since it was shown, no permission, or the
      *                     disk is full; the file is then as it was
      */
-    public void saveRotation(Path file, Orientation stored, double width, double height, int quarterTurns)
-            throws IOException {
+    public void saveRotation(Path file, Object shown, Orientation stored, double width, double height,
+                             int quarterTurns) throws IOException {
         Path target = file.toRealPath();   // a link keeps pointing at the saved file
         String format = extension(target);
         if (!canSaveRotation(target)) {
@@ -95,7 +96,7 @@ public final class FileActions {
         }
         FileStamp before = FileStamp.of(target);
         ImageHeader header = ImageHeader.read(target);
-        if (before == null || !header.orientation().equals(stored) || header.width() != width
+        if (before == null || !before.equals(shown) || !header.orientation().equals(stored) || header.width() != width
                 || header.height() != height) {
             throw new IOException("the file changed since it was shown");
         }

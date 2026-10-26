@@ -77,8 +77,11 @@ class ViewerControllerTest {
     /** What "Save rotation?" answers (#51), the names asked about, the notes and the saves requested. */
     private ViewerController.RotationAnswer rotationAnswer = new ViewerController.RotationAnswer(true, false);
     private final List<String> askedToSave = new ArrayList<>();
+    /** Runs while "Save rotation?" is open, like events in a modal dialog's loop. */
+    private Runnable answerHook = () -> { };
     private final List<String> notSavable = new ArrayList<>();
     private final List<String> saves = new ArrayList<>();
+    private final List<Object> savedStamps = new ArrayList<>();
     /** The timing log's clock, in nanoseconds. */
     private long now;
 
@@ -159,6 +162,7 @@ class ViewerControllerTest {
                     @Override
                     public ViewerController.RotationAnswer askSaveRotation(String name) {
                         askedToSave.add(name);
+                        answerHook.run();
                         return rotationAnswer;
                     }
 
@@ -168,8 +172,9 @@ class ViewerControllerTest {
                     }
 
                     @Override
-                    public void saveRotation(Path file, Orientation stored, double width, double height,
-                                             int quarterTurns) {
+                    public void saveRotation(Path file, Object stamp, Orientation stored, double width,
+                                             double height, int quarterTurns) {
+                        savedStamps.add(stamp);
                         saves.add(String.format("%s %d° %s %.0f×%.0f +%d", file.getFileName(), stored.degrees(),
                                 stored.mirror() ? "mirrored" : "", width, height, quarterTurns));
                     }
@@ -952,6 +957,59 @@ class ViewerControllerTest {
         controller.next();
         assertEquals(List.of("d.gif"), notSavable);
         assertEquals(List.of(), askedToSave);
+    }
+
+    /** #69: the save gets the file's state from when the image was loaded, so a replaced file is refused. */
+    @Test
+    void theSaveGetsTheStampFromLoading() {
+        rotationAnswer = new ViewerController.RotationAnswer(true, false);
+        controller.open(folder);
+        lastLoad().done().accept(new Loaded<>("a.jpg", 800, 600, Orientation.UPRIGHT).stamped("v1"));
+        controller.rotateRight();
+        controller.next();
+        assertEquals(List.of("v1"), savedStamps);
+    }
+
+    /** #69: a turn made while another folder is being listed is asked about before that folder replaces the image. */
+    @Test
+    void aTurnMadeWhileAFolderIsListedIsNotLost() throws IOException {
+        List<Runnable> listings = new ArrayList<>();
+        controller = newController(listings::add);
+        controller.resize(1920, 1080);
+        controller.open(folder);
+        listings.remove(0).run();
+        lastLoad().finish(800, 600);
+
+        Path other = Files.createDirectory(folder.resolve("other"));
+        Files.createFile(other.resolve("x.jpg"));
+        controller.open(other);
+        controller.rotateRight();          // a.jpg still on screen while "other" is listed
+        listings.remove(0).run();
+        assertEquals(List.of("a.jpg"), askedToSave);
+    }
+
+    /** #69: an open started during that question wins; the older folder's result is dropped. */
+    @Test
+    void anOpenDuringTheQuestionWins() throws IOException {
+        List<Runnable> listings = new ArrayList<>();
+        controller = newController(listings::add);
+        controller.resize(1920, 1080);
+        controller.open(folder);
+        listings.remove(0).run();
+        lastLoad().finish(800, 600);
+
+        Path other = Files.createDirectory(folder.resolve("other"));
+        Files.createFile(other.resolve("x.jpg"));
+        Path third = Files.createDirectory(folder.resolve("third"));
+        Files.createFile(third.resolve("y.jpg"));
+        controller.open(other);
+        controller.rotateRight();
+        answerHook = () -> controller.open(third);   // the user opens another folder while asked
+        listings.remove(0).run();
+        int loadsBefore = loads.size();
+        listings.remove(0).run();
+        assertEquals(loadsBefore + 1, loads.size());
+        assertEquals(third.resolve("y.jpg"), lastLoad().file());
     }
 
     /** Back on the image before its save ended: it loads again, from the saved file. */
