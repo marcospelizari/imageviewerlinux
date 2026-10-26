@@ -87,14 +87,29 @@ tasks.register('appImage', Exec) {
 // The release (#61): the app image, the .desktop file, the icons and install.sh, in build/release/linview-<version>/
 // and packed as linview-<version>-linux-x64.tar.gz. install.sh is the one installer: installLocal runs it too.
 def releaseName = "linview-${version}"
+def releaseClean = tasks.register('releaseClean', Delete) {
+    delete layout.buildDirectory.dir('release')   // Sync can't overwrite the runtime's read-only files of a last build
+}
+
 def releaseDir = tasks.register('releaseDir', Sync) {
     group = 'distribution'
     description = 'Puts the app image, desktop file, icons and install.sh into build/release/linview-<version>.'
-    dependsOn 'appImage'
+    dependsOn 'appImage', releaseClean
     into layout.buildDirectory.dir("release/${releaseName}")
     from(layout.buildDirectory.dir('jpackage/linview')) { into 'linview' }
-    from('packaging/linux') { include 'linview.desktop', 'install.sh' }
-    from('src/main/resources/linview/icons') { into 'icons' }
+    // Fixed modes: CI checks files out writable for everyone (umask 0000), which must not reach the archive.
+    from('packaging/linux') {
+        include 'linview.desktop'
+        filePermissions { unix('rw-r--r--') }
+    }
+    from('packaging/linux') {
+        include 'install.sh'
+        filePermissions { unix('rwxr-xr-x') }
+    }
+    from('src/main/resources/linview/icons') {
+        into 'icons'
+        filePermissions { unix('rw-r--r--') }
+    }
 }
 
 tasks.register('releaseArchive', Tar) {
