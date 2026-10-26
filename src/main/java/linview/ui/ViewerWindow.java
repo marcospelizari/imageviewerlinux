@@ -5,6 +5,9 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 import java.nio.file.Path;
 
@@ -20,14 +23,17 @@ import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextInputControl;
 import javafx.scene.layout.StackPane;
+import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Stage;
 
 import linview.files.FileActions;
 import linview.image.Loaded;
+import linview.image.Orientation;
 import linview.image.thumbnail.ThumbnailLoader;
 import linview.settings.Settings;
 import linview.viewer.ImageList;
@@ -53,6 +59,13 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
     private final Label overlay = new Label();
     private boolean taskbarOpen;
     private final FileActions files;
+    private final ThumbnailLoader thumbnails;
+    /**
+     * Changes to files, one at a time and in order (Trash #34, saved rotations #51), off the JavaFX thread: a USB
+     * drive can be slow. {@link #close} waits for them.
+     */
+    private final ExecutorService fileWork = Executors.newSingleThreadExecutor(
+            Thread.ofPlatform().name("linview-files").daemon().factory());
     /** A file is on its way to the Trash: Del waits for it, so the same file isn't sent twice (#34). */
     private boolean trashing;
     private Settings settings;
@@ -62,6 +75,7 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
     public ViewerWindow(Stage stage, ThumbnailLoader thumbnails, FileActions files) {
         this.stage = stage;
         this.files = files;
+        this.thumbnails = thumbnails;
         strip = new ThumbStrip(thumbnails, index -> controller.select(index));
         taskbar = new Taskbar(this::execute, percent -> controller.zoomToPercent(percent), () -> viewer.requestFocus());
         overlay.getStyleClass().add("overlay");
@@ -126,6 +140,7 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
         stage.setScene(scene);
         stage.show();
         rememberWindow(scene);
+        stage.setOnCloseRequest(e -> controller.leaveImage());   // the window's close button (#51)
         stage.setOnHiding(e -> controller.windowClosed(stage.isFullScreen(), windowX, windowY, windowWidth,
                 windowHeight));
         if (settings.fullScreen()) {
@@ -180,7 +195,20 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
             case ROTATE_LEFT -> controller.rotateLeft();
             case DELETE -> trashCurrent();
             // Quits, also from full-screen, which the next start remembers (Marcos, 2026-10-24, #26).
-            case ESCAPE -> stage.close();
+            case ESCAPE -> {
+                controller.leaveImage();   // a turn may be saved first (#51)
+                stage.close();
+            }
+        }
+    }
+
+    /** Waits for file changes still running, e.g. a rotation being saved when quitting (#51). */
+    public void close() {
+        fileWork.shutdown();
+        try {
+            fileWork.awaitTermination(30, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 
@@ -203,7 +231,7 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
             return;
         }
         trashing = true;
-        Thread.ofPlatform().name("linview-trash").daemon().start(() -> {
+        fileWork.execute(() -> {
             IOException failure = null;
             try {
                 files.trash(target);
@@ -216,12 +244,73 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
                 if (problem == null) {
                     controller.trashed(target);
                 } else {
-                    Alert error = new Alert(Alert.AlertType.ERROR, "Can't move " + target.getFileName()
-                            + " to the Trash:\n" + problem.getMessage() + "\n\nNothing was deleted.");
-                    error.initOwner(stage);
-                    error.setTitle("Move to Trash");
-                    error.setHeaderText(null);
-                    error.showAndWait();
+                    showProblem("Move to Trash", "Can't move " + target.getFileName() + " to the Trash:\n"
+                            + problem.getMessage() + "\n\nNothing was deleted.");
+                }
+            });
+        });
+    }
+
+    private void showProblem(String title, String text) {
+        Alert error = new Alert(Alert.AlertType.ERROR, text);
+        error.initOwner(stage);
+        error.setTitle(title);
+        error.setHeaderText(null);
+        error.showAndWait();
+    }
+
+    /** "Save rotation?" (#51): Enter saves, Esc doesn't; "Don't ask again" makes the choice the setting. */
+    @Override
+    public ViewerController.RotationAnswer askSaveRotation(String name) {
+        ButtonType save = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        ButtonType dontSave = new ButtonType("Don't save", ButtonBar.ButtonData.CANCEL_CLOSE);
+        CheckBox dontAsk = new CheckBox("Don't ask again");
+        Alert ask = new Alert(Alert.AlertType.CONFIRMATION, null, save, dontSave);
+        ask.initOwner(stage);
+        ask.setTitle("Save rotation");
+        ask.setHeaderText(null);
+        ask.getDialogPane().setContent(new VBox(12, new Label("Save the rotation of " + name + " to the file?"),
+                dontAsk));
+        boolean saving = ask.showAndWait().orElse(dontSave) == save;
+        return new ViewerController.RotationAnswer(saving, dontAsk.isSelected());
+    }
+
+    @Override
+    public void showRotationNotSavable(String name) {
+        Alert note = new Alert(Alert.AlertType.INFORMATION, "The rotation of " + name + " stays in the view: "
+                + "linview saves rotations to JPEG, PNG and BMP files only.");
+        note.initOwner(stage);
+        note.setTitle("Save rotation");
+        note.setHeaderText(null);
+        note.showAndWait();
+    }
+
+    /** Writes the turn on the file thread; stored thumbnails of the file are deleted so they are made again. */
+    @Override
+    public void saveRotation(Path file, Orientation stored, double width, double height, int quarterTurns) {
+        fileWork.execute(() -> {
+            IOException failure = null;
+            try {
+                files.saveRotation(file, stored, width, height, quarterTurns);
+            } catch (IOException e) {
+                failure = e;
+            }
+            if (failure == null) {
+                try {
+                    thumbnails.forget(file);
+                } catch (IOException e) {
+                    System.getLogger("linview").log(System.Logger.Level.WARNING,
+                            "Can't delete the old thumbnail of " + file + ": " + e.getMessage());
+                }
+            }
+            IOException problem = failure;
+            Platform.runLater(() -> {
+                if (problem == null) {
+                    strip.refresh();   // visible thumbnails are asked for again: the saved one is made anew
+                    controller.rotationSaved(file);
+                } else {
+                    showProblem("Save rotation", "Can't save the rotation of " + file.getFileName() + ":\n"
+                            + problem.getMessage() + "\n\nThe file was not changed.");
                 }
             });
         });

@@ -10,7 +10,9 @@ import java.util.List;
 import java.util.concurrent.Executor;
 import java.util.function.Consumer;
 
+import linview.files.FileActions;
 import linview.image.Loaded;
+import linview.image.Orientation;
 import linview.settings.Settings;
 import linview.settings.SettingsStore;
 
@@ -89,6 +91,22 @@ public final class ViewerController<I> {
          * when no image is shown.
          */
         void showZoom(double width, double height, double percent, boolean locked);
+
+        /** Asks whether to save the turn of the image {@code name} to its file before leaving it (#51). */
+        RotationAnswer askSaveRotation(String name);
+
+        /** Says that the turn of {@code name} can't be saved, as its format can't take it (#51): once per run. */
+        void showRotationNotSavable(String name);
+
+        /**
+         * Saves {@code quarterTurns} × 90° clockwise to {@code file}, which was shown with {@code stored}, its stored
+         * size {@code width} × {@code height} (#51): in the background, then {@link #rotationSaved} or a message.
+         */
+        void saveRotation(Path file, Orientation stored, double width, double height, int quarterTurns);
+    }
+
+    /** The answer to "Save rotation?": save or not, and whether to do the same from now on without asking. */
+    public record RotationAnswer(boolean save, boolean dontAskAgain) {
     }
 
     /**
@@ -139,6 +157,8 @@ public final class ViewerController<I> {
     /** The image on screen, and the load it came from; {@code null} when a message is shown. */
     private Loaded<I> shown;
     private long shownRequest;
+    /** The note that a format can't keep a turn was shown in this run (#51). */
+    private boolean notSavableShown;
     /** The load that failed with the message on screen; a damaged file can still be moved to the Trash (#34). */
     private long failedRequest = -1;
     /** R / L turns of the image on screen, on top of its EXIF orientation: kept if its full image differs (#65). */
@@ -188,6 +208,7 @@ public final class ViewerController<I> {
      * running on a slow disk can't be interrupted.
      */
     public void open(Path path) {
+        leaveImage();
         long id = ++opening;
         background.execute(() -> {
             if (id != opening) {
@@ -422,6 +443,54 @@ public final class ViewerController<I> {
         }
     }
 
+    /**
+     * Leaving the image on screen (next, open, quit): a turn made with R / L can be saved to its file (R-FILE-03,
+     * #51), as {@code rotation.save} says: asked, always or never. A full turn asks nothing; a format that can't keep
+     * it gets a note, once per run. Called by navigation and open; the window calls it before quitting. After it the
+     * turn counts as handled, so a later R / L adds to what the file then holds.
+     */
+    public void leaveImage() {
+        int quarterTurns = Math.floorMod(turns, 4);
+        if (shown == null || shownRequest != request || quarterTurns == 0
+                || settings.rotationSave() == Settings.RotationSave.NEVER) {
+            return;
+        }
+        Path file = images.current();
+        String name = file.getFileName().toString();
+        Orientation stored = shown.orientation().rotated(-turns);
+        turns = 0;
+        if (!FileActions.canSaveRotation(file)) {
+            if (!notSavableShown) {
+                notSavableShown = true;
+                display.showRotationNotSavable(name);
+            }
+            return;
+        }
+        boolean save = true;
+        if (settings.rotationSave() == Settings.RotationSave.ASK) {
+            RotationAnswer answer = display.askSaveRotation(name);
+            save = answer.save();
+            if (answer.dontAskAgain()) {
+                settings.setRotationSave(save ? Settings.RotationSave.ALWAYS : Settings.RotationSave.NEVER);
+                store.save(settings);
+            }
+        }
+        if (save) {
+            display.saveRotation(file, stored, shown.width(), shown.height(), quarterTurns);
+        }
+    }
+
+    /**
+     * The turn was saved to {@code file} (#51). Back on it before the save ended, the old file is on screen: it is
+     * loaded again (the cache sees the new change time), unless it has been turned again meanwhile.
+     */
+    public void rotationSaved(Path file) {
+        if (images != null && !images.isEmpty() && images.current().equals(file) && shown != null
+                && shownRequest == request && turns == 0) {
+            showCurrent();
+        }
+    }
+
     /** Drag (R-ZOOM-05): moves the image by ({@code dx}, {@code dy}), only where it's larger than the window. */
     public void pan(double dx, double dy) {
         if (view == null || !canLayOut()) {
@@ -512,6 +581,7 @@ public final class ViewerController<I> {
     /** Shows {@code moved} unless it's the image already shown (end of the folder, or nothing open). */
     private void moveTo(ImageList moved) {
         if (moved != null && moved != images) {
+            leaveImage();
             images = moved;
             showCurrent();
         }

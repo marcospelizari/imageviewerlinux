@@ -20,6 +20,16 @@ class OrientationTest {
         assertEquals(new Orientation(270, false), Orientation.of(8));
     }
 
+    /** #51: what saving a rotation writes is the value read back. */
+    @Test
+    void exifValueIsTheInverseOfOf() {
+        for (int value = 1; value <= 8; value++) {
+            assertEquals(value, Orientation.of(value).exifValue());
+        }
+        assertEquals(6, Orientation.UPRIGHT.rotated(1).exifValue());
+        assertEquals(5, Orientation.of(2).rotated(-1).exifValue());   // mirror kept
+    }
+
     @Test
     void unknownValuesAreUpright() {
         assertEquals(Orientation.UPRIGHT, Orientation.of(0));

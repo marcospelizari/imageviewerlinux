@@ -17,7 +17,7 @@ A fast image viewer for Linux, inspired by FastStone Image Viewer.
 - Images shown smaller than their size are redrawn sharp (Lanczos) a moment after zooming stops
 - Actual size (100 %) is one image pixel per screen pixel at any desktop scaling (e.g. 200 % on a 4K monitor)
 - The next images are loaded in the background and recently seen ones kept (up to 300 MB), so they show at once. Very large images are decoded only as large as needed; one too large for memory shows a message
-- R / L turn the image on screen 90° right / left; the file is not changed, and the next image opens upright again
+- R / L turn the image on screen 90° right / left. When you leave a turned image, linview asks whether to save the turn to the file (or always / never, see `rotation.save`): a JPEG gets only a new EXIF orientation, its image data untouched; a PNG or BMP is written again without loss (a PNG keeps its colour profile and text). The file's modified date stays. Other formats keep the turn in the view only
 - Del moves the image to the Trash after asking (Enter = move, Esc = cancel), then shows the next one. Uses the desktop's `gio trash`, so files on a USB drive go to that drive's Trash and your file manager shows them; if the Trash can't take a file, it stays where it is
 - Window title shows the file name, its position in the folder, the image size and the zoom %
 - The window opens on the monitor under the mouse pointer, as it was closed (full-screen, or the same size and place); Enter toggles full-screen, where the mouse pointer hides after 2 s without movement
@@ -106,7 +106,7 @@ so new windows open on the monitor with the mouse pointer.
 | A | Fit to window ↔ actual size (100%) |
 | 1 | Actual size (100%) |
 | Ctrl+Shift+L | Zoom lock on/off |
-| R / L | Rotate the view 90° right / left (the file is not changed) |
+| R / L | Rotate the view 90° right / left (saving to the file is asked when you leave the image) |
 | Del | Move to the Trash (asks first) |
 
 ## Settings
@@ -123,6 +123,7 @@ Edit it while linview is closed. Most settings are used by features that are sti
 | `overlay.counter` | `true` / `false`: position `2/16` in the full-screen overlay | `true` |
 | `overlay.fileName` | `true` / `false`: file name in the full-screen overlay | `false` |
 | `overlay.corner` | `bottom-left`, `bottom-right`, `top-left`, `top-right`: where the overlay goes | `bottom-left` |
+| `rotation.save` | `ask` / `always` / `never`: save a turn made with R / L to the file when leaving the image ("Don't ask again" sets it) | `ask` |
 | `start.fullScreen` | `true` / `false`: start in full-screen; saved on closing | `false` |
 | `window.x`, `window.y` | window position, saved on closing; used when the mouse is on that monitor at start, else the window is centred on the mouse's monitor | empty |
 | `window.width`, `window.height` | window size, at least 200; saved on closing | `1024`, `700` |

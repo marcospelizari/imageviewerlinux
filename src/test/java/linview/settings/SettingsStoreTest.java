@@ -45,6 +45,7 @@ class SettingsStoreTest {
         assertNull(s.windowY());
         assertEquals(1024, s.windowWidth());
         assertEquals(700, s.windowHeight());
+        assertEquals(Settings.RotationSave.ASK, s.rotationSave());
     }
 
     @Test
@@ -73,6 +74,7 @@ class SettingsStoreTest {
         s.setWindowPosition(1930.0, -10.0);
         s.setWindowWidth(800);
         s.setWindowHeight(600);
+        s.setRotationSave(Settings.RotationSave.NEVER);
         Path file = folder.resolve("new/linview/settings.properties");   // folders are created
 
         assertTrue(save(s, file));
@@ -90,6 +92,7 @@ class SettingsStoreTest {
         assertEquals(-10.0, loaded.windowY());
         assertEquals(800, loaded.windowWidth());
         assertEquals(600, loaded.windowHeight());
+        assertEquals(Settings.RotationSave.NEVER, loaded.rotationSave());
         assertTrue(warnings.isEmpty(), warnings.toString());
     }
 
@@ -113,13 +116,14 @@ class SettingsStoreTest {
                 "overlay.counter=yes",
                 "overlay.corner=middle",
                 "start.fullScreen=maybe",
+                "rotation.save=sometimes",
                 "window.x=left",
                 "window.y=10",
                 "window.width=50",
                 "window.height=tall"));
 
         assertDefaults(load(file));
-        assertEquals(11, warnings.size(), warnings.toString());   // window.y is valid, but useless without x
+        assertEquals(12, warnings.size(), warnings.toString());   // window.y is valid, but useless without x
     }
 
     @Test

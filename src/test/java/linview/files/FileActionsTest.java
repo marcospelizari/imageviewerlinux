@@ -1,14 +1,20 @@
 package linview.files;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Instant;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
@@ -17,7 +23,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** R-FILE-01 (#34): moving to the Trash, and that a failure never deletes the file (R5). */
+import javax.imageio.ImageIO;
+
+import linview.image.ImageHeader;
+import linview.image.Orientation;
+
+/** R-FILE-01 (#34): moving to the Trash, and that a failure never deletes the file (R5); saving a rotation (#51). */
 class FileActionsTest {
 
     @TempDir
@@ -80,5 +91,73 @@ class FileActionsTest {
 
     private static boolean onPath(String tool) {
         return Stream.of(System.getenv("PATH").split(":")).anyMatch(dir -> Files.isExecutable(Path.of(dir, tool)));
+    }
+
+    private static final FileTime LAST_YEAR = FileTime.from(Instant.parse("2025-06-01T10:00:00Z"));
+
+    /** A 30 × 20 image as Java writes it, dated last year, readable by its owner and group only. */
+    private Path image(String name, String format) throws IOException {
+        Path file = folder.resolve(name);
+        ImageIO.write(new BufferedImage(30, 20, BufferedImage.TYPE_INT_RGB), format, file.toFile());
+        Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-r-----"));
+        Files.setLastModifiedTime(file, LAST_YEAR);
+        return file;
+    }
+
+    @Test
+    void savedRotationKeepsTheDateAndPermissions() throws IOException {
+        Path jpeg = image("a.jpg", "jpg");
+        new FileActions().saveRotation(jpeg, Orientation.UPRIGHT, 30, 20, 1);
+        assertEquals(6, ImageHeader.read(jpeg).orientation().exifValue());
+        assertEquals(LAST_YEAR, Files.getLastModifiedTime(jpeg));
+        assertEquals("rw-r-----", PosixFilePermissions.toString(Files.getPosixFilePermissions(jpeg)));
+
+        Path png = image("b.png", "png");
+        new FileActions().saveRotation(png, Orientation.UPRIGHT, 30, 20, 3);
+        assertEquals(20, ImageHeader.read(png).width());
+        assertEquals(LAST_YEAR, Files.getLastModifiedTime(png));
+        try (var left = Files.list(folder)) {
+            assertEquals(2, left.count());   // no temporary file left
+        }
+    }
+
+    /** The file isn't the image that was shown any more (another program changed it): nothing is written. */
+    @Test
+    void aChangedFileIsNotSaved() throws IOException {
+        Path jpeg = image("a.jpg", "jpg");
+        byte[] before = Files.readAllBytes(jpeg);
+        FileActions actions = new FileActions();
+        IOException e = assertThrows(IOException.class,
+                () -> actions.saveRotation(jpeg, Orientation.UPRIGHT.rotated(1), 30, 20, 1));
+        assertEquals("the file changed since it was shown", e.getMessage());
+        assertThrows(IOException.class, () -> actions.saveRotation(jpeg, Orientation.UPRIGHT, 40, 20, 1));
+        assertArrayEquals(before, Files.readAllBytes(jpeg));
+    }
+
+    /** Skipped as root (the CI container), who may write a read-only file. */
+    @Test
+    void aReadOnlyFileIsRefused() throws IOException {
+        Path locked = image("a.jpg", "jpg");
+        Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("r--r-----"));
+        assumeFalse(Files.isWritable(locked), "running as root");
+        byte[] before = Files.readAllBytes(locked);
+        IOException e = assertThrows(IOException.class,
+                () -> new FileActions().saveRotation(locked, Orientation.UPRIGHT, 30, 20, 1));
+        assertEquals("no permission to change the file", e.getMessage());
+        assertArrayEquals(before, Files.readAllBytes(locked));
+    }
+
+    @Test
+    void otherFormatsAndMissingFilesAreRefused() throws IOException {
+        FileActions actions = new FileActions();
+        image("a.jpg", "jpg");
+        Path gif = image("b.gif", "gif");
+        assertFalse(FileActions.canSaveRotation(gif));
+        assertThrows(IOException.class, () -> actions.saveRotation(gif, Orientation.UPRIGHT, 30, 20, 1));
+        assertThrows(IOException.class,
+                () -> actions.saveRotation(folder.resolve("missing.jpg"), Orientation.UPRIGHT, 30, 20, 1));
+        try (var left = Files.list(folder)) {
+            assertEquals(2, left.count());
+        }
     }
 }

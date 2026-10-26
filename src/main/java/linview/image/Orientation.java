@@ -22,6 +22,16 @@ public record Orientation(int degrees, boolean mirror) {
         };
     }
 
+    /** The EXIF value 1–8 for this orientation, the inverse of {@link #of}: what saving a rotation writes (#51). */
+    public int exifValue() {
+        return switch (degrees) {
+            case 90 -> mirror ? 7 : 6;
+            case 180 -> mirror ? 4 : 3;
+            case 270 -> mirror ? 5 : 8;
+            default -> mirror ? 2 : 1;
+        };
+    }
+
     /**
      * This orientation turned a further {@code quarterTurns} × 90° clockwise (negative = anticlockwise), as the
      * R / L view rotation does (R-VIEW-01). The rotation comes after the mirror, so it simply adds up.

@@ -48,6 +48,7 @@ public class App extends Application {
     private ViewerController<Image> controller;
     private ImageLoader loader;
     private ThumbnailLoader thumbnails;
+    private ViewerWindow window;
     /**
      * Lists folders off the JavaFX thread (#21). Two at a time, so one slow folder (USB, network) doesn't hold up the
      * next (#55); at most one more waits, and a newer open replaces it, so stalled folders can't pile up threads (#57).
@@ -88,7 +89,7 @@ public class App extends Application {
             }
         };
         thumbnails = new ThumbnailLoader();
-        ViewerWindow window = new ViewerWindow(stage, thumbnails, new FileActions());
+        window = new ViewerWindow(stage, thumbnails, new FileActions());
         controller = new ViewerController<>(settings, store, source, window, timing, folders, Platform::runLater);
         window.show(controller, settings);
 
@@ -101,6 +102,9 @@ public class App extends Application {
 
     @Override
     public void stop() {
+        if (window != null) {
+            window.close();   // a rotation still being saved (#51)
+        }
         if (loader != null) {
             loader.close();
         }

@@ -18,6 +18,9 @@ public final class Settings {
     /** Where the full-screen overlay goes (#45); {@code bottom-left} in the file. */
     public enum Corner { BOTTOM_LEFT, BOTTOM_RIGHT, TOP_LEFT, TOP_RIGHT }
 
+    /** Leaving a turned image (#51): ask whether to save the turn to the file, or always / never save it. */
+    public enum RotationSave { ASK, ALWAYS, NEVER }
+
     static final List<String> BACKGROUND_PRESETS = List.of("black", "darkgrey", "grey", "white");
     private static final Pattern HEX_COLOUR = Pattern.compile("#[0-9a-f]{6}");
 
@@ -32,6 +35,7 @@ public final class Settings {
     private boolean fileNameOverlay = false;
     private boolean counterOverlay = true;
     private Corner overlayCorner = Corner.BOTTOM_LEFT;
+    private RotationSave rotationSave = RotationSave.ASK;
     private boolean fullScreen = false;
     private Double windowX = null;
     private Double windowY = null;
@@ -66,6 +70,14 @@ public final class Settings {
 
     public void setWheel(Wheel wheel) {
         this.wheel = require(wheel, "wheel");
+    }
+
+    public RotationSave rotationSave() {
+        return rotationSave;
+    }
+
+    public void setRotationSave(RotationSave rotationSave) {
+        this.rotationSave = require(rotationSave, "rotation.save");
     }
 
     /** A preset from {@link #BACKGROUND_PRESETS} or {@code #rrggbb}, in lower case (R-FS-06). */

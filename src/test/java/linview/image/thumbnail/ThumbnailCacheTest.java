@@ -1,6 +1,7 @@
 package linview.image.thumbnail;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -46,6 +47,23 @@ class ThumbnailCacheTest {
         assertEquals(4, back.getWidth());
         assertTrue(ThumbnailCache.textChunks(png).isEmpty());
         assertTrue(ThumbnailCache.textChunks(new byte[] {1, 2, 3}).isEmpty());
+    }
+
+    /** #51: after a write that keeps the modified time, every size of the thumbnail goes. */
+    @Test
+    void forgetDeletesEverySize() throws IOException {
+        ThumbnailCache cache = new ThumbnailCache(home.resolve("thumbnails"));
+        Path photo = home.resolve("photo.jpg");
+        cache.store(photo, 1_700_000_000L, new BufferedImage(256, 192, BufferedImage.TYPE_INT_ARGB));
+        Path normal = Files.createDirectories(home.resolve("thumbnails/normal"))
+                .resolve(ThumbnailCache.md5(ThumbnailCache.uri(photo)) + ".png");
+        Files.write(normal, png(4, 3));
+
+        cache.forget(photo);
+
+        assertNull(cache.find(photo, 1_700_000_000L));
+        assertFalse(Files.exists(normal));
+        cache.forget(home.resolve("never-thumbnailed.jpg"));   // nothing to delete: no error
     }
 
     @Test
