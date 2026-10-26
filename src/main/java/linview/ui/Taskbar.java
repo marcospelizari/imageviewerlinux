@@ -17,8 +17,8 @@ import linview.viewer.Zoom;
  * The full-screen taskbar at the bottom-left (R-FS-04, #29, REPORT.md §3.3): ◀ ▶ − [52%] + Fit 100% Lock and the
  * image size, only as wide as its contents; Lock is highlighted while zoom lock is on. The buttons carry out the same actions as the keys. The % box takes {@code 52},
  * {@code 52%} or {@code 52.5}: Enter applies it, like + / − (Marcos, 2026-10-24), and anything else keeps the zoom;
- * Esc cancels the typing. While the box has the keyboard, the viewer's keys don't fire (§6.4). A Settings button
- * comes with the settings window (#48).
+ * Esc cancels the typing. While the box has the keyboard, the viewer's keys don't fire (§6.4). Settings opens the
+ * settings window (#48).
  */
 final class Taskbar extends HBox {
 
@@ -60,6 +60,7 @@ final class Taskbar extends HBox {
                 button("Fit", "Fit to screen", () -> act.accept(Keys.Action.FIT)),
                 button("100%", "Actual size", () -> act.accept(Keys.Action.ACTUAL_SIZE)),
                 lock,
+                button("Settings", "Settings (F12)", () -> act.accept(Keys.Action.SETTINGS)),
                 size);
     }
 

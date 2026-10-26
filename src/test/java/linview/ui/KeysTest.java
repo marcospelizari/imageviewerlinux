@@ -22,6 +22,11 @@ class KeysTest {
     }
 
     @Test
+    void f12OpensTheSettings() {
+        assertEquals(Action.SETTINGS, plain(KeyCode.F12));   // #48
+    }
+
+    @Test
     void nextKeys() {
         assertEquals(Action.NEXT, plain(KeyCode.RIGHT));
         assertEquals(Action.NEXT, plain(KeyCode.PAGE_DOWN));

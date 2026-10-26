@@ -1079,6 +1079,34 @@ class ViewerControllerTest {
         assertFalse(title.contains("locked"), title);
     }
 
+    /** #48: Lock chosen in the settings window locks the image on screen, like Ctrl+Shift+L. */
+    @Test
+    void lockFromTheSettingsWindowLocksTheImageOnScreen() {
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);   // fit: 50%
+        controller.chooseZoomMode(Zoom.Mode.LOCK);
+        assertEquals(Zoom.Mode.LOCK, settings.zoomMode());
+        assertEquals(50, settings.zoomPercent());
+        assertTrue(title.contains("50% (locked)"), title);
+        controller.chooseZoomMode(Zoom.Mode.LOCK);   // already locked: unchanged
+        assertEquals(Zoom.Mode.LOCK, settings.zoomMode());
+        controller.chooseZoomMode(Zoom.Mode.HEIGHT);
+        assertEquals(Zoom.Mode.HEIGHT, settings.zoomMode());
+        assertEquals(1080.0 / 2160, shownView.scale(), 1e-9);
+    }
+
+    /** With nothing on screen, Lock waits for the next open, which fits its first image and locks that (#63). */
+    @Test
+    void lockFromTheSettingsWindowWithNothingOpen() throws IOException {
+        controller.chooseZoomMode(Zoom.Mode.LOCK);
+        assertEquals(Zoom.Mode.LOCK, settings.zoomMode());
+        store.flush();
+        assertTrue(Files.readString(settingsFile).contains("zoom.mode=lock"));
+        controller.open(folder);
+        lastLoad().finish(3840, 2160);
+        assertEquals(50, settings.zoomPercent());
+    }
+
     /** #63: closed while locked, the next start fits the first image and locks its %; the next images keep it. */
     @Test
     void aLockFromBeforeFitsTheFirstImageAndLocksItsPercent() throws IOException {
