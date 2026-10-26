@@ -87,29 +87,32 @@ On KDE Plasma (Wayland), turn on *System Settings → Window Management → Wind
 so new windows open on the monitor with the mouse pointer.
 
 ## Keys
+Press F1 in linview (or right-click → Keyboard shortcuts…) to see this list. The keys copy FastStone Image Viewer.
+
 | Key | Action |
 |---|---|
-| → PgDn Space | Next image |
-| ← PgUp Backspace | Previous image |
+| → / ← | Next / previous image; on an image wider than the window they scroll it instead (stop at its edges) |
+| ↓ / ↑ | Scroll an image taller than the window |
+| PgDn Space / PgUp Backspace | Next / previous image, always |
 | Home / End | First / last image |
-| Ctrl+O or O | Open an image |
+| Ctrl+O or O | Open an image or a folder |
 | Enter or F11 | Full-screen on/off |
 | Esc | Quit, also from full-screen (the next start is in full-screen then) |
 | + / − | Zoom in / out (keypad too) |
 | Mouse wheel | Scroll the image, or next/previous image (`wheel` setting) |
-| Ctrl + mouse wheel | Zoom in / out at the mouse pointer |
+| Ctrl or Shift + mouse wheel | Zoom in / out at the mouse pointer |
 | Drag (left button) | Move an image larger than the window |
 | Click (left button) | Immediately: right half next image; left half previous image (each click) |
 | Hold left button | Magnifier (twice actual size) when the image fits the window |
-| B | Fit to window |
 | W | Fit width |
 | A | Fit to window ↔ actual size (100%) |
-| 1 | Actual size (100%) |
+| 1 / 2 | Actual size (100%) / 200% (keypad too) |
 | Ctrl+Shift+L | Zoom lock on/off |
 | R / L | Rotate the view 90° right / left (saving to the file is asked when you leave the image) |
 | Del | Move to the Trash (asks first) |
 | F12 | Settings window (also the Settings button in the full-screen taskbar) |
-| Right-click | Menu with the main actions and their keys: open, zoom modes (fit height too), rotate, full-screen, Trash, settings |
+| F1 | Keyboard shortcuts (this list) |
+| Right-click | Menu with the main actions and their keys: open, zoom modes (fit height too), rotate, full-screen, Trash, settings, shortcuts |
 
 ## Settings
 Press F12 (or Settings in the full-screen taskbar) for the settings window: how images open (fit, fit width, fit

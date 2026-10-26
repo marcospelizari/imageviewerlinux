@@ -27,17 +27,29 @@ class KeysTest {
     }
 
     @Test
+    void f1ShowsTheShortcutList() {
+        assertEquals(Action.SHORTCUTS, plain(KeyCode.F1));   // #36
+    }
+
+    @Test
     void nextKeys() {
-        assertEquals(Action.NEXT, plain(KeyCode.RIGHT));
         assertEquals(Action.NEXT, plain(KeyCode.PAGE_DOWN));
         assertEquals(Action.NEXT, plain(KeyCode.SPACE));
     }
 
     @Test
     void previousKeys() {
-        assertEquals(Action.PREVIOUS, plain(KeyCode.LEFT));
         assertEquals(Action.PREVIOUS, plain(KeyCode.PAGE_UP));
         assertEquals(Action.PREVIOUS, plain(KeyCode.BACK_SPACE));
+    }
+
+    /** #36, FastStone: the arrows scroll an image larger than the window; the controller decides. */
+    @Test
+    void arrowKeys() {
+        assertEquals(Action.ARROW_LEFT, plain(KeyCode.LEFT));
+        assertEquals(Action.ARROW_RIGHT, plain(KeyCode.RIGHT));
+        assertEquals(Action.ARROW_UP, plain(KeyCode.UP));
+        assertEquals(Action.ARROW_DOWN, plain(KeyCode.DOWN));
     }
 
     @Test
@@ -68,12 +80,17 @@ class KeysTest {
         assertEquals(Action.ZOOM_IN, plain(KeyCode.ADD));
         assertEquals(Action.ZOOM_OUT, plain(KeyCode.MINUS));
         assertEquals(Action.ZOOM_OUT, plain(KeyCode.SUBTRACT));
-        assertEquals(Action.FIT, plain(KeyCode.B));
+        assertNull(plain(KeyCode.B));         // #36: A toggles fit ↔ actual size
+        assertNull(plain(KeyCode.NUMPAD0));
         assertEquals(Action.FIT_WIDTH, plain(KeyCode.W));
         assertEquals(Action.FIT_OR_ACTUAL, plain(KeyCode.A));
         assertEquals(Action.ACTUAL_SIZE, plain(KeyCode.DIGIT1));
         assertEquals(Action.ACTUAL_SIZE, plain(KeyCode.NUMPAD1));
-        assertNull(Keys.actionFor(KeyCode.B, false, true, false));   // Shift only where listed
+        assertEquals(Action.ZOOM_200, plain(KeyCode.DIGIT2));   // #36: FastStone's 1–9, inside 1–200%
+        assertEquals(Action.ZOOM_200, plain(KeyCode.NUMPAD2));
+        assertNull(plain(KeyCode.DIGIT3));
+        assertNull(plain(KeyCode.DIGIT0));
+        assertNull(Keys.actionFor(KeyCode.W, false, true, false));   // Shift only where listed
         assertNull(plain(KeyCode.H));   // fit height has no key (Marcos, 2026-10-22)
         assertEquals(Action.ZOOM_LOCK, Keys.actionFor(KeyCode.L, true, true, false));   // R-ZOOM-02, FastStone
         assertNull(Keys.actionFor(KeyCode.L, true, false, false));

@@ -265,7 +265,10 @@ public final class ViewerPane extends StackPane {
         }
     }
 
-    /** Turns the wheel's pixels into notches; Ctrl + wheel zooms at the mouse, the plain wheel follows the setting. */
+    /**
+     * Turns the wheel's pixels into notches; Ctrl or Shift + wheel zooms at the mouse, the plain wheel follows the
+     * setting.
+     */
     private void scrolled(ScrollEvent e) {
         if (controller == null) {
             return;
@@ -273,8 +276,10 @@ public final class ViewerPane extends StackPane {
         e.consume();
         double notchesX = e.getDeltaX() / notch(e.getMultiplierX());
         double notchesY = e.getDeltaY() / notch(e.getMultiplierY());
-        if (e.isControlDown()) {
-            controller.zoomWheel(notchesY, e.getX() * scale, e.getY() * scale);
+        if (e.isControlDown() || e.isShiftDown()) {   // FastStone zooms with either (#36)
+            // GTK turns Shift + wheel into a sideways scroll, so the notches may arrive as X.
+            double notches = notchesY != 0 ? notchesY : notchesX;
+            controller.zoomWheel(notches, e.getX() * scale, e.getY() * scale);
         } else {
             controller.wheel(notchesX, notchesY);
         }

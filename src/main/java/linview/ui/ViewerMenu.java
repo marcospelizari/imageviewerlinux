@@ -50,7 +50,7 @@ final class ViewerMenu {
         menu.getItems().setAll(
                 item("Open…", "Ctrl+O", false, true, Keys.Action.OPEN),
                 new SeparatorMenuItem(),
-                item("Fit to window", "B", state.mode() == Zoom.Mode.FIT, true, Keys.Action.FIT),
+                item("Fit to window", "", state.mode() == Zoom.Mode.FIT, true, Keys.Action.FIT),
                 item("Fit width", "W", state.mode() == Zoom.Mode.WIDTH, true, Keys.Action.FIT_WIDTH),
                 item("Fit height", "", state.mode() == Zoom.Mode.HEIGHT, true, Keys.Action.FIT_HEIGHT),
                 item("Actual size (100%)", "1", state.mode() == Zoom.Mode.ACTUAL, true, Keys.Action.ACTUAL_SIZE),
@@ -65,7 +65,8 @@ final class ViewerMenu {
                 // Only once the selected image has finished loading (review R7, #34).
                 item("Move to Trash…", "Del", false, state.canTrash(), Keys.Action.DELETE),
                 new SeparatorMenuItem(),
-                item("Settings…", "F12", false, true, Keys.Action.SETTINGS));
+                item("Settings…", "F12", false, true, Keys.Action.SETTINGS),
+                item("Keyboard shortcuts…", "F1", false, true, Keys.Action.SHORTCUTS));
         menu.show(anchor, screenX, screenY);
     }
 

@@ -11,8 +11,13 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 
 - Right-click menu on the image, in a window and in full-screen: Open…, Fit to window, Fit width, Fit height, Actual size, Zoom lock (the current mode ticked), Rotate right / left, Full-screen (ticked when on), Move to Trash… and Settings…, each with its key. Each item does exactly what its key does. Items that need an image are greyed while none is shown, and Move to Trash also while the next image is loading. Fit height, which has no key, can be chosen here. Esc or a click outside closes the menu (that click doesn't also change the image). In full-screen the pointer no longer hides while the menu or a dialog (settings, a question) is open (#49)
 
+- Keyboard shortcut list: F1, or Keyboard shortcuts… in the right-click menu, shows every key and mouse action (#36)
+- More FastStone keys: 2 (keypad too) zooms to 200%, and Shift + wheel zooms like Ctrl + wheel (#36)
+
 ### Changed
 - A file counts as changed also when only its change time differs, e.g. after a tool that keeps the modified date: the image cache and the thumbnails load it again (#51)
+- The arrow keys work as in FastStone: on an image larger than the window → ← ↓ ↑ scroll it by a wheel notch and stop at its edges; where it isn't wider, → / ← still go to the next / previous image. PgDn, Space, PgUp and Backspace always change the image (#36)
+- B no longer fits the image: A already switches between fit and actual size. Fit to window stays in the right-click menu and on the taskbar's Fit button (#36)
 
 ## [0.3.0] - 2026-10-25 - Phase 4
 ### Added
