@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.awt.image.BufferedImage;
@@ -133,15 +134,23 @@ class FileActionsTest {
         assertArrayEquals(before, Files.readAllBytes(jpeg));
     }
 
+    /** Skipped as root (the CI container), who may write a read-only file. */
     @Test
-    void readOnlyOtherFormatsAndMissingFilesAreRefused() throws IOException {
-        FileActions actions = new FileActions();
+    void aReadOnlyFileIsRefused() throws IOException {
         Path locked = image("a.jpg", "jpg");
         Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("r--r-----"));
+        assumeFalse(Files.isWritable(locked), "running as root");
         byte[] before = Files.readAllBytes(locked);
-        assertThrows(IOException.class, () -> actions.saveRotation(locked, Orientation.UPRIGHT, 30, 20, 1));
+        IOException e = assertThrows(IOException.class,
+                () -> new FileActions().saveRotation(locked, Orientation.UPRIGHT, 30, 20, 1));
+        assertEquals("no permission to change the file", e.getMessage());
         assertArrayEquals(before, Files.readAllBytes(locked));
+    }
 
+    @Test
+    void otherFormatsAndMissingFilesAreRefused() throws IOException {
+        FileActions actions = new FileActions();
+        image("a.jpg", "jpg");
         Path gif = image("b.gif", "gif");
         assertFalse(FileActions.canSaveRotation(gif));
         assertThrows(IOException.class, () -> actions.saveRotation(gif, Orientation.UPRIGHT, 30, 20, 1));
