@@ -109,6 +109,7 @@ so new windows open on the monitor with the mouse pointer.
 | R / L | Rotate the view 90° right / left (saving to the file is asked when you leave the image) |
 | Del | Move to the Trash (asks first) |
 | F12 | Settings window (also the Settings button in the full-screen taskbar) |
+| Right-click | Menu with the main actions and their keys: open, zoom modes (fit height too), rotate, full-screen, Trash, settings |
 
 ## Settings
 Press F12 (or Settings in the full-screen taskbar) for the settings window: how images open (fit, fit width, fit

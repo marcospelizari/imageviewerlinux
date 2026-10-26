@@ -119,6 +119,10 @@ public final class ViewerPane extends StackPane {
     private boolean fullScreen;
     /** A full-screen panel is open (#27): the pointer stays. */
     private boolean pointerKept;
+    /** The right-click menu is open (#49): the mouse is over it, so this pane sees no movement. */
+    private boolean menuOpen;
+    /** False while a dialog has the keyboard (settings, a question): the mouse is over that window. */
+    private boolean windowFocused = true;
     private double dragX;
     private double dragY;
 
@@ -232,6 +236,16 @@ public final class ViewerPane extends StackPane {
             fullScreen = now;
             pointerMoved();   // entering: hides after a while; leaving: shown, and stays
         });
+        window.focusedProperty().addListener((obs, was, now) -> {
+            windowFocused = now;
+            pointerMoved();
+        });
+    }
+
+    /** While the right-click menu is open the pointer doesn't hide (#49). */
+    void menuOpen(boolean open) {
+        menuOpen = open;
+        pointerMoved();
     }
 
     /** While a full-screen panel is open the pointer doesn't hide (#27). */
@@ -244,7 +258,7 @@ public final class ViewerPane extends StackPane {
     private void pointerMoved() {
         pointerHidden = false;
         updateCursor();
-        if (fullScreen && !pointerKept) {
+        if (fullScreen && !pointerKept && !menuOpen && windowFocused) {
             idle.playFromStart();
         } else {
             idle.stop();

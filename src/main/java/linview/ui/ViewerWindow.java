@@ -55,6 +55,7 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
     private final ViewerPane viewer = new ViewerPane();
     private final ThumbStrip strip;
     private final Taskbar taskbar;
+    private final ViewerMenu menu = new ViewerMenu(this::execute, open -> viewer.menuOpen(open));
     /** The full-screen overlay (#45): {@code 2/16}, optionally with the file name. */
     private final Label overlay = new Label();
     private boolean taskbarOpen;
@@ -126,9 +127,14 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
                 content.getHeight());
         scene.getStylesheets().add(ViewerWindow.class.getResource("/linview/viewer.css").toExternalForm());
         panels.watch(scene);
+        menu.closeOnOutsidePress(scene, stage);
         scene.setOnKeyPressed(this::keyPressed);
         // A click on the image's left / right half goes back / on immediately (#62).
         viewer.onClicks(() -> execute(Keys.Action.PREVIOUS), () -> execute(Keys.Action.NEXT));
+        // Right-click: the menu (#49); the image's gestures use the left button only.
+        viewer.setOnContextMenuRequested(e -> menu.show(viewer, e.getScreenX(), e.getScreenY(),
+                new ViewerMenu.State(controller.isImageShown(), controller.trashTarget() != null,
+                        settings.zoomMode(), stage.isFullScreen())));
 
         stage.setFullScreenExitHint("");
         stage.setFullScreenExitKeyCombination(KeyCombination.NO_MATCH);   // Esc quits, also from full-screen (#26)
@@ -196,6 +202,7 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
             case ZOOM_OUT -> controller.zoomOut();
             case FIT -> controller.setZoomMode(Zoom.Mode.FIT);
             case FIT_WIDTH -> controller.setZoomMode(Zoom.Mode.WIDTH);
+            case FIT_HEIGHT -> controller.setZoomMode(Zoom.Mode.HEIGHT);
             case ACTUAL_SIZE -> controller.setZoomMode(Zoom.Mode.ACTUAL);
             case FIT_OR_ACTUAL -> controller.toggleFitOrActual();
             case ZOOM_LOCK -> controller.toggleZoomLock();
