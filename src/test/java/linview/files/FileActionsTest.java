@@ -25,6 +25,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import javax.imageio.ImageIO;
 
+import linview.image.FileStamp;
 import linview.image.ImageHeader;
 import linview.image.Orientation;
 
@@ -107,13 +108,13 @@ class FileActionsTest {
     @Test
     void savedRotationKeepsTheDateAndPermissions() throws IOException {
         Path jpeg = image("a.jpg", "jpg");
-        new FileActions().saveRotation(jpeg, Orientation.UPRIGHT, 30, 20, 1);
+        new FileActions().saveRotation(jpeg, FileStamp.of(jpeg), Orientation.UPRIGHT, 30, 20, 1);
         assertEquals(6, ImageHeader.read(jpeg).orientation().exifValue());
         assertEquals(LAST_YEAR, Files.getLastModifiedTime(jpeg));
         assertEquals("rw-r-----", PosixFilePermissions.toString(Files.getPosixFilePermissions(jpeg)));
 
         Path png = image("b.png", "png");
-        new FileActions().saveRotation(png, Orientation.UPRIGHT, 30, 20, 3);
+        new FileActions().saveRotation(png, FileStamp.of(png), Orientation.UPRIGHT, 30, 20, 3);
         assertEquals(20, ImageHeader.read(png).width());
         assertEquals(LAST_YEAR, Files.getLastModifiedTime(png));
         try (var left = Files.list(folder)) {
@@ -128,10 +129,30 @@ class FileActionsTest {
         byte[] before = Files.readAllBytes(jpeg);
         FileActions actions = new FileActions();
         IOException e = assertThrows(IOException.class,
-                () -> actions.saveRotation(jpeg, Orientation.UPRIGHT.rotated(1), 30, 20, 1));
+                () -> actions.saveRotation(jpeg, FileStamp.of(jpeg), Orientation.UPRIGHT.rotated(1), 30, 20, 1));
         assertEquals("the file changed since it was shown", e.getMessage());
-        assertThrows(IOException.class, () -> actions.saveRotation(jpeg, Orientation.UPRIGHT, 40, 20, 1));
+        assertThrows(IOException.class,
+                () -> actions.saveRotation(jpeg, FileStamp.of(jpeg), Orientation.UPRIGHT, 40, 20, 1));
         assertArrayEquals(before, Files.readAllBytes(jpeg));
+    }
+
+    /**
+     * #69: another program replaced the file with an image of the same size and orientation after it was loaded: the
+     * stamp from loading no longer matches, so nothing is written.
+     */
+    @Test
+    void aSameSizeReplacementIsNotSaved() throws IOException {
+        Path png = image("a.png", "png");
+        FileStamp loaded = FileStamp.of(png);
+        BufferedImage other = new BufferedImage(30, 20, BufferedImage.TYPE_INT_RGB);
+        other.setRGB(0, 0, 0xffffff);
+        ImageIO.write(other, "png", png.toFile());
+        Files.setLastModifiedTime(png, LAST_YEAR);   // as a date-keeping editor would
+        byte[] replaced = Files.readAllBytes(png);
+        IOException e = assertThrows(IOException.class,
+                () -> new FileActions().saveRotation(png, loaded, Orientation.UPRIGHT, 30, 20, 1));
+        assertEquals("the file changed since it was shown", e.getMessage());
+        assertArrayEquals(replaced, Files.readAllBytes(png));
     }
 
     /** Skipped as root (the CI container), who may write a read-only file. */
@@ -142,7 +163,7 @@ class FileActionsTest {
         assumeFalse(Files.isWritable(locked), "running as root");
         byte[] before = Files.readAllBytes(locked);
         IOException e = assertThrows(IOException.class,
-                () -> new FileActions().saveRotation(locked, Orientation.UPRIGHT, 30, 20, 1));
+                () -> new FileActions().saveRotation(locked, FileStamp.of(locked), Orientation.UPRIGHT, 30, 20, 1));
         assertEquals("no permission to change the file", e.getMessage());
         assertArrayEquals(before, Files.readAllBytes(locked));
     }
@@ -153,9 +174,10 @@ class FileActionsTest {
         image("a.jpg", "jpg");
         Path gif = image("b.gif", "gif");
         assertFalse(FileActions.canSaveRotation(gif));
-        assertThrows(IOException.class, () -> actions.saveRotation(gif, Orientation.UPRIGHT, 30, 20, 1));
         assertThrows(IOException.class,
-                () -> actions.saveRotation(folder.resolve("missing.jpg"), Orientation.UPRIGHT, 30, 20, 1));
+                () -> actions.saveRotation(gif, FileStamp.of(gif), Orientation.UPRIGHT, 30, 20, 1));
+        assertThrows(IOException.class,
+                () -> actions.saveRotation(folder.resolve("missing.jpg"), null, Orientation.UPRIGHT, 30, 20, 1));
         try (var left = Files.list(folder)) {
             assertEquals(2, left.count());
         }

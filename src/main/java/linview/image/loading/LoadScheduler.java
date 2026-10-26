@@ -175,10 +175,11 @@ final class LoadScheduler<I> {
     }
 
     private void decodeSelected(Request request) {
-        request.cancelWork = decoder.decode(request.file, request.minResolution, false, (result, state) -> {
+        request.cancelWork = decoder.decode(request.file, request.minResolution, false, (decoded, state) -> {
             if (request.cancelled) {
                 return;
             }
+            Loaded<I> result = decoded.stamped(state);
             keep(request.file, result, state);
             answer(request, result);
         });
@@ -255,10 +256,11 @@ final class LoadScheduler<I> {
         preloading = file;
         boolean[] cancelled = {false};
         boolean[] finished = {false};
-        Runnable cancel = decoder.decode(file, wantedResolution, true, (result, state) -> {
+        Runnable cancel = decoder.decode(file, wantedResolution, true, (decoded, state) -> {
             if (cancelled[0]) {
                 return;
             }
+            Loaded<I> result = decoded.stamped(state);
             finished[0] = true;
             preloading = null;
             cancelPreload = () -> { };

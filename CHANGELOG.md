@@ -19,6 +19,10 @@ All notable changes are recorded here. Versions follow [Semantic Versioning](htt
 - The arrow keys work as in FastStone: on an image larger than the window → ← ↓ ↑ scroll it by a wheel notch and stop at its edges; where it isn't wider, → / ← still go to the next / previous image. PgDn, Space, PgUp and Backspace always change the image (#36)
 - B no longer fits the image: A already switches between fit and actual size. Fit to window stays in the right-click menu and on the taskbar's Fit button (#36)
 
+### Fixed
+- A turn made while a folder opened with Ctrl+O is still being listed (a slow USB disk) is no longer lost: linview asks about it (or saves it, as `rotation.save` says) before the new folder replaces the image (#69)
+- Saving a rotation refuses a file that another program changed after linview loaded it, also when the new image has the same size: linview says "the file changed since it was shown" and leaves the file alone (#69)
+
 ## [0.3.0] - 2026-10-25 - Phase 4
 ### Added
 - Click to navigate, as in FastStone: a left click on the right half of the image goes to the next image, on the left half to the previous one. Navigation happens immediately on each click, including successive clicks; double-click no longer toggles full-screen (Enter / F11 still do; Marcos's decision, #64). The magnifier now appears after holding the button 0.2 s (or at once when moving), so a click doesn't flash it; clicks on the taskbar or thumbnail strip don't navigate (#62)

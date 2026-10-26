@@ -119,6 +119,20 @@ class LoadSchedulerTest {
         assertEquals(4, decodes.size());   // A, B, C, D: all wanted images kept, nothing more to do
     }
 
+    /** #69: every answer carries the file's state from when it was loaded, from the cache too. */
+    @Test
+    void resultsCarryTheStampFromLoading() {
+        List<Loaded<String>> results = new ArrayList<>();
+        scheduler.load(A, 0, results::add);
+        scheduler.preload(List.of(B), 0);
+        last().finish("v1");
+        last().finish("v1");             // B preloaded
+        scheduler.load(B, 0, results::add);
+        assertEquals("v1", results.get(0).stamp());
+        assertEquals("v1", results.get(1).stamp());
+        assertTrue(results.get(1).cached());
+    }
+
     @Test
     void aPreloadedImageIsShownAtOnce() {
         select(A);
