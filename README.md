@@ -57,11 +57,23 @@ build/jpackage/linview/bin/linview "$HOME/Pictures/photo.jpg"
 (`./gradlew installDist` does not give a working start script: use `appImage`.)
 
 ### Install for your user
-No root and nothing outside your home folder, so it also suits image-based systems such as Bazzite or Silverblue:
+No root and nothing outside your home folder, so it also suits image-based systems such as Bazzite or Silverblue.
+Linux on x86-64 only; nothing else is needed, the app brings its own Java runtime.
+
+From a release, download `linview-<version>-linux-x64.tar.gz`, then:
+
+```sh
+tar xzf linview-1.0.0-linux-x64.tar.gz
+linview-1.0.0/install.sh               # or again with a newer release to update
+linview-1.0.0/install.sh --uninstall   # removes it
+```
+
+From the source code, the same with Gradle:
 
 ```sh
 ./gradlew installLocal     # or again to update
 ./gradlew uninstallLocal   # removes it
+./gradlew releaseArchive   # builds the release archive in build/release/
 ```
 
 This puts the app in `~/.local/share/linview`, adds linview to the app menu with its icon, and offers it in the file
