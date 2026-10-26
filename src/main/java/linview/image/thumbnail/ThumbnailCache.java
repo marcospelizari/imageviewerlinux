@@ -14,6 +14,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HexFormat;
+import java.util.List;
 import java.util.Map;
 import java.util.zip.CRC32;
 
@@ -31,10 +32,12 @@ final class ThumbnailCache {
 
     private static final byte[] PNG_SIGNATURE = {(byte) 0x89, 'P', 'N', 'G', '\r', '\n', 0x1a, '\n'};
 
+    private final Path root;
     private final Path large;
 
     /** {@code thumbnails}: the cache's root folder, see {@link #defaultFolder}. */
     ThumbnailCache(Path thumbnails) {
+        this.root = thumbnails;
         this.large = thumbnails.resolve("large");
     }
 
@@ -57,6 +60,17 @@ final class ThumbnailCache {
             return HexFormat.of().formatHex(digest);
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("MD5 is always available", e);
+        }
+    }
+
+    /**
+     * Deletes every size of {@code file}'s thumbnail (#51): after a write that keeps the modified time, such as saving
+     * a rotation, the standard's {@code Thumb::MTime} check can't tell the old one apart, for us or file managers.
+     */
+    void forget(Path file) throws IOException {
+        String name = md5(uri(file)) + ".png";
+        for (String size : List.of("normal", "large", "x-large", "xx-large")) {
+            Files.deleteIfExists(root.resolve(size).resolve(name));
         }
     }
 

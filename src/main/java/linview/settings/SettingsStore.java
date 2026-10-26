@@ -87,6 +87,8 @@ public final class SettingsStore {
         read(p, "overlay.fileName", String.valueOf(s.fileNameOverlay()), text -> s.setFileNameOverlay(flag(text)));
         read(p, "overlay.corner", name(s.overlayCorner()),
                 text -> s.setOverlayCorner(choice(Settings.Corner.class, text)));
+        read(p, "rotation.save", name(s.rotationSave()),
+                text -> s.setRotationSave(choice(Settings.RotationSave.class, text)));
         read(p, "start.fullScreen", String.valueOf(s.fullScreen()), text -> s.setFullScreen(flag(text)));
 
         // A position needs both x and y; with only one, the window opens on the mouse's monitor.
@@ -164,6 +166,7 @@ public final class SettingsStore {
                 "overlay.counter=" + s.counterOverlay(),
                 "overlay.fileName=" + s.fileNameOverlay(),
                 "overlay.corner=" + name(s.overlayCorner()),
+                "rotation.save=" + name(s.rotationSave()),
                 "start.fullScreen=" + s.fullScreen(),
                 "window.x=" + (s.windowX() == null ? "" : format(s.windowX())),
                 "window.y=" + (s.windowY() == null ? "" : format(s.windowY())),

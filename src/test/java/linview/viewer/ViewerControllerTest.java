@@ -74,6 +74,11 @@ class ViewerControllerTest {
     /** What the controller asked to preload, one list per call (#21). */
     private final List<List<String>> preloads = new ArrayList<>();
     private double preloadResolution;
+    /** What "Save rotation?" answers (#51), the names asked about, the notes and the saves requested. */
+    private ViewerController.RotationAnswer rotationAnswer = new ViewerController.RotationAnswer(true, false);
+    private final List<String> askedToSave = new ArrayList<>();
+    private final List<String> notSavable = new ArrayList<>();
+    private final List<String> saves = new ArrayList<>();
     /** The timing log's clock, in nanoseconds. */
     private long now;
 
@@ -149,6 +154,24 @@ class ViewerControllerTest {
                     public void showZoom(double width, double height, double percent, boolean locked) {
                         zoomShown = width > 0 ? String.format("%.0f×%.0f %s%%%s", width, height, percent,
                                 locked ? " locked" : "") : "";
+                    }
+
+                    @Override
+                    public ViewerController.RotationAnswer askSaveRotation(String name) {
+                        askedToSave.add(name);
+                        return rotationAnswer;
+                    }
+
+                    @Override
+                    public void showRotationNotSavable(String name) {
+                        notSavable.add(name);
+                    }
+
+                    @Override
+                    public void saveRotation(Path file, Orientation stored, double width, double height,
+                                             int quarterTurns) {
+                        saves.add(String.format("%s %d° %s %.0f×%.0f +%d", file.getFileName(), stored.degrees(),
+                                stored.mirror() ? "mirrored" : "", width, height, quarterTurns));
                     }
                 }, new TimingLog(timingLines::add, () -> now), background, onJavaFXThread);
     }
@@ -823,6 +846,111 @@ class ViewerControllerTest {
         controller.trashed(folder.resolve("elsewhere/a.jpg"));
         assertEquals(3, stripFiles.size());
         assertEquals("a.jpg", shownImage);
+    }
+
+    /** #51: leaving a turned image asks, and saves the turn on top of the orientation it was shown with. */
+    @Test
+    void leavingATurnedImageAsksAndSaves() {
+        controller.open(folder);
+        lastLoad().done().accept(new Loaded<>("a.jpg", 800, 600, new Orientation(90, true)));
+        controller.rotateRight();
+        controller.rotateRight();
+        controller.rotateRight();   // 3 × right = 1 × left
+        controller.next();
+        assertEquals(List.of("a.jpg"), askedToSave);
+        assertEquals(List.of("a.jpg 90° mirrored 800×600 +3"), saves);
+        lastLoad().finish(800, 600);
+        controller.previous();   // b was not turned
+        assertEquals(1, askedToSave.size());
+    }
+
+    @Test
+    void aFullTurnOrNoTurnAsksNothing() {
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        for (int i = 0; i < 4; i++) {
+            controller.rotateLeft();
+        }
+        controller.next();
+        lastLoad().finish(800, 600);
+        controller.next();
+        assertEquals(List.of(), askedToSave);
+        assertEquals(List.of(), saves);
+    }
+
+    @Test
+    void dontSaveAndDontAskAgainNeverSaves() throws IOException {
+        rotationAnswer = new ViewerController.RotationAnswer(false, true);
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        controller.rotateRight();
+        controller.next();
+        assertEquals(Settings.RotationSave.NEVER, settings.rotationSave());
+        lastLoad().finish(800, 600);
+        controller.rotateRight();
+        controller.next();
+        assertEquals(1, askedToSave.size());
+        assertEquals(List.of(), saves);
+        store.flush();
+        assertTrue(Files.readString(settingsFile).contains("rotation.save=never"));
+    }
+
+    @Test
+    void saveAndDontAskAgainAlwaysSaves() {
+        rotationAnswer = new ViewerController.RotationAnswer(true, true);
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        controller.rotateRight();
+        controller.next();
+        lastLoad().finish(800, 600);
+        controller.rotateRight();
+        controller.next();
+        assertEquals(Settings.RotationSave.ALWAYS, settings.rotationSave());
+        assertEquals(1, askedToSave.size());
+        assertEquals(2, saves.size());
+    }
+
+    /** Opening another folder and quitting leave the image too. */
+    @Test
+    void openingAndQuittingLeaveTheImage() {
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        controller.rotateRight();
+        controller.open(folder.resolve("b.jpg"));
+        assertEquals(List.of("a.jpg"), askedToSave);
+        lastLoad().finish(800, 600);
+        controller.rotateRight();
+        controller.leaveImage();   // the window quits
+        controller.leaveImage();   // asked once only
+        assertEquals(List.of("a.jpg", "b.jpg"), askedToSave);
+    }
+
+    @Test
+    void formatsThatCantKeepATurnGetANoteOncePerRun() throws IOException {
+        Files.createFile(folder.resolve("d.gif"));
+        Files.createFile(folder.resolve("e.webp"));
+        controller.open(folder.resolve("d.gif"));
+        lastLoad().finish(800, 600);
+        controller.rotateRight();
+        controller.next();
+        lastLoad().finish(800, 600);
+        controller.rotateRight();
+        controller.next();
+        assertEquals(List.of("d.gif"), notSavable);
+        assertEquals(List.of(), askedToSave);
+    }
+
+    /** Back on the image before its save ended: it loads again, from the saved file. */
+    @Test
+    void rotationSavedReloadsTheImageOnScreen() {
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        int loadsBefore = loads.size();
+        controller.rotationSaved(folder.resolve("b.jpg"));   // not on screen
+        assertEquals(loadsBefore, loads.size());
+        controller.rotationSaved(folder.resolve("a.jpg"));
+        assertEquals(loadsBefore + 1, loads.size());
+        assertEquals(folder.resolve("a.jpg"), lastLoad().file());
     }
 
     /** #26: closing remembers the mode and the window; a window smaller than allowed is saved at the minimum. */

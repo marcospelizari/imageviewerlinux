@@ -83,6 +83,14 @@ public final class ThumbnailLoader {
         waiting.clear();
     }
 
+    /**
+     * Deletes the stored thumbnails of {@code file} (#51), for us and file managers; one kept in memory is made again
+     * anyway, as its file's change time differs. Any thread.
+     */
+    public void forget(Path file) throws IOException {
+        cache.forget(file);
+    }
+
     public void close() {
         worker.interrupt();
     }
