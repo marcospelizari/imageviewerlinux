@@ -533,7 +533,34 @@ public final class ViewerController<I> {
     }
 
     /**
-     * The wheel without Ctrl (R-WHEEL-01), in notches; positive = wheel up / left. {@code scroll} moves the image
+     * ← → ↑ ↓ (#36, FastStone): one wheel notch of scrolling on a side where the image is larger than the window,
+     * stopping at its edges. Where it isn't wider, ← → go to the previous / next image; ↑ ↓ then do nothing.
+     * {@code dx}, {@code dy}: −1, 0 or 1, positive = right / down.
+     */
+    public void arrow(int dx, int dy) {
+        if (dx != 0 && !wider()) {
+            if (dx > 0) {
+                next();
+            } else {
+                previous();
+            }
+            return;
+        }
+        double step = viewHeight * SCROLL_STEP;
+        pan(-dx * step, -dy * step);
+    }
+
+    /**
+     * The selected image is on screen and wider than the window, by more than rounding (fit width is not wider).
+     * While the next image loads the old one doesn't count, so ← → keep navigating.
+     */
+    private boolean wider() {
+        return view != null && canLayOut() && shownRequest == request
+                && shown.uprightWidth() * view.scale() > viewWidth + 0.5;
+    }
+
+    /**
+     * The wheel without Ctrl or Shift (R-WHEEL-01), in notches; positive = wheel up / left. {@code scroll} moves the image
      * and stops at its edges; {@code navigate} goes to the previous (up) or next (down) image.
      */
     public void wheel(double notchesX, double notchesY) {

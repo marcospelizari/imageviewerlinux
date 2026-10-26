@@ -196,6 +196,10 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
             case PREVIOUS -> controller.previous();
             case FIRST -> controller.first();
             case LAST -> controller.last();
+            case ARROW_LEFT -> controller.arrow(-1, 0);
+            case ARROW_RIGHT -> controller.arrow(1, 0);
+            case ARROW_UP -> controller.arrow(0, -1);
+            case ARROW_DOWN -> controller.arrow(0, 1);
             case OPEN -> chooseAndOpen();
             case FULL_SCREEN -> stage.setFullScreen(!stage.isFullScreen());   // Enter, F11 (R-VIEW-02)
             case ZOOM_IN -> controller.zoomIn();
@@ -204,12 +208,14 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
             case FIT_WIDTH -> controller.setZoomMode(Zoom.Mode.WIDTH);
             case FIT_HEIGHT -> controller.setZoomMode(Zoom.Mode.HEIGHT);
             case ACTUAL_SIZE -> controller.setZoomMode(Zoom.Mode.ACTUAL);
+            case ZOOM_200 -> controller.zoomToPercent(200);
             case FIT_OR_ACTUAL -> controller.toggleFitOrActual();
             case ZOOM_LOCK -> controller.toggleZoomLock();
             case ROTATE_RIGHT -> controller.rotateRight();
             case ROTATE_LEFT -> controller.rotateLeft();
             case DELETE -> trashCurrent();
             case SETTINGS -> SettingsWindow.ask(stage, settings).ifPresent(this::apply);
+            case SHORTCUTS -> ShortcutsWindow.show(stage);
             // Quits, also from full-screen, which the next start remembers (Marcos, 2026-10-24, #26).
             case ESCAPE -> {
                 controller.leaveImage();   // a turn may be saved first (#51)

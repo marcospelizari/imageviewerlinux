@@ -1288,6 +1288,65 @@ class ViewerControllerTest {
         assertEquals(new Zoom.View(1, 200, 0), shownView);
     }
 
+    /** #36, FastStone: where the image fits, ← → go to the previous / next image and ↑ ↓ do nothing. */
+    @Test
+    void arrowsNavigateWhenTheImageFits() {
+        controller.open(folder);
+        lastLoad().finish(800, 600);
+        Zoom.View before = shownView;
+        controller.arrow(0, 1);
+        controller.arrow(0, -1);
+        assertEquals(before, shownView);
+        controller.arrow(1, 0);
+        assertEquals("b.jpg — 2/3 — linview", title);
+        controller.arrow(-1, 0);
+        assertEquals("a.jpg — 1/3 — linview", title);
+    }
+
+    /** #36: an image wider than the window scrolls by a wheel notch and stops at its edges, never changing image. */
+    @Test
+    void arrowsScrollALargerImageAndStopAtTheEdges() {
+        controller.setZoomMode(Zoom.Mode.ACTUAL);
+        controller.open(folder);
+        lastLoad().finish(3000, 2000);   // wider and taller than 1920×1080: opens at the top-centre
+        assertEquals(new Zoom.View(1, -540, 0), shownView);
+        int count = loads.size();
+        controller.arrow(1, 0);
+        controller.arrow(0, 1);
+        assertEquals(new Zoom.View(1, -648, -108), shownView);
+        for (int i = 0; i < 20; i++) {
+            controller.arrow(1, 0);
+            controller.arrow(0, 1);
+        }
+        assertEquals(new Zoom.View(1, 1920 - 3000, 1080 - 2000), shownView);
+        controller.arrow(-1, 0);
+        assertEquals(new Zoom.View(1, 1920 - 3000 + 108, 1080 - 2000), shownView);
+        assertEquals(count, loads.size());
+    }
+
+    /** #36: fit width only scrolls down; ← → still navigate, despite rounding in the scale. */
+    @Test
+    void arrowsInFitWidthScrollDownAndNavigateSideways() {
+        controller.setZoomMode(Zoom.Mode.WIDTH);
+        controller.open(folder);
+        lastLoad().finish(1234, 4321);
+        controller.arrow(0, 1);
+        assertEquals(-108, shownView.y(), 1e-9);
+        controller.arrow(1, 0);
+        assertEquals("b.jpg — 2/3 — linview", title);
+    }
+
+    /** #36: while the next image loads, the old one on screen doesn't stop ← → from navigating. */
+    @Test
+    void arrowsKeepNavigatingWhileTheNextImageLoads() {
+        controller.setZoomMode(Zoom.Mode.ACTUAL);
+        controller.open(folder);
+        lastLoad().finish(3000, 2000);
+        controller.next();               // b.jpg loading, a.jpg still on screen
+        controller.arrow(1, 0);
+        assertEquals("c.jpg — 3/3 — linview", title);
+    }
+
     /** R-WHEEL-01 scroll: one notch = 10% of the window height; stops at the edges, never changes image. */
     @Test
     void scrollWheelMovesTheImageAndStopsAtTheEdges() {
