@@ -13,6 +13,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.GroupPrincipal;
+import java.nio.file.attribute.PosixFileAttributes;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.util.Comparator;
@@ -120,6 +122,58 @@ class FileActionsTest {
         try (var left = Files.list(folder)) {
             assertEquals(2, left.count());   // no temporary file left
         }
+    }
+
+    /** #71: the saved file keeps its group, not the one a new file would get. Needs a second group to test with. */
+    @Test
+    void savedRotationKeepsTheGroup() throws IOException {
+        Path jpeg = image("a.jpg", "jpg");
+        GroupPrincipal own = Files.readAttributes(jpeg, PosixFileAttributes.class).group();
+        GroupPrincipal other = null;
+        for (String name : List.of("adm", "users", "wheel", "daemon")) {
+            try {
+                GroupPrincipal group = folder.getFileSystem().getUserPrincipalLookupService()
+                        .lookupPrincipalByGroupName(name);
+                Files.setAttribute(jpeg, "posix:group", group);
+                if (!group.equals(own)) {
+                    other = group;
+                    break;
+                }
+            } catch (IOException notAllowed) {
+                // not one of ours
+            }
+        }
+        assumeTrue(other != null, "no second group to test with");
+
+        new FileActions().saveRotation(jpeg, FileStamp.of(jpeg), Orientation.UPRIGHT, 30, 20, 1);
+        assertEquals(other, Files.readAttributes(jpeg, PosixFileAttributes.class).group());
+    }
+
+    /** #71: an ACL on the file stays as it was; without it the group bits (the ACL mask) would open the file up. */
+    @Test
+    void savedRotationKeepsTheAcl() throws IOException, InterruptedException {
+        Path png = image("b.png", "png");
+        assumeTrue(run("setfacl", "-m", "u:root:r", png.toString()) == 0, "no setfacl, or no ACL support here");
+        String acl = aclOf(png);
+
+        new FileActions().saveRotation(png, FileStamp.of(png), Orientation.UPRIGHT, 30, 20, 1);
+        assertEquals(acl, aclOf(png));
+        assertTrue(acl.contains("user:root:r--"), acl);
+    }
+
+    private static int run(String... command) throws InterruptedException {
+        try {
+            return new ProcessBuilder(command).redirectErrorStream(true).start().waitFor();
+        } catch (IOException missing) {
+            return -1;
+        }
+    }
+
+    private static String aclOf(Path file) throws IOException, InterruptedException {
+        Process getfacl = new ProcessBuilder("getfacl", "-c", file.toString()).start();
+        String acl = new String(getfacl.getInputStream().readAllBytes());
+        getfacl.waitFor();
+        return acl;
     }
 
     /** The file isn't the image that was shown any more (another program changed it): nothing is written. */

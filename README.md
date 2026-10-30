@@ -2,7 +2,7 @@
 
 A fast image viewer for Linux, inspired by FastStone Image Viewer.
 
-**Status:** 1.0.0, the first release for daily use. It opens a folder, moves through its images quickly (preloading and a memory-limited cache), zooms (also at the mouse pointer) with zoom lock, and drags large images. Full-screen has a thumbnail strip at the top, a taskbar at the bottom-left, a position overlay and a magnifier. Del moves an image to the Trash, a turn can be saved to the file, and F12 opens the settings.
+**Status:** 1.0.1, the first release for daily use. It opens a folder, moves through its images quickly (preloading and a memory-limited cache), zooms (also at the mouse pointer) with zoom lock, and drags large images. Full-screen has a thumbnail strip at the top, a taskbar at the bottom-left, a position overlay and a magnifier. Del moves an image to the Trash, a turn can be saved to the file, and F12 opens the settings.
 
 ## What works now
 - Open an image or a folder from the command line, or with Ctrl+O. Opening an image makes its folder the list.

@@ -164,6 +164,8 @@ public final class ViewerController<I> {
     private long failedRequest = -1;
     /** R / L turns of the image on screen, on top of its EXIF orientation: kept if its full image differs (#65). */
     private int turns;
+    /** Turns the next {@link #showCurrent} gives its image: after a save, those the saved file doesn't hold (#73). */
+    private int turnsOnReload;
     private Zoom.View view;
     /** True after + / −: a resize keeps that zoom; the next image starts from the mode again (R-ZOOM-01). */
     private boolean zoomedByHand;
@@ -514,12 +516,15 @@ public final class ViewerController<I> {
     }
 
     /**
-     * The turn was saved to {@code file} (#51). Back on it before the save ended, the old file is on screen: it is
-     * loaded again (the cache sees the new change time), unless it has been turned again meanwhile.
+     * {@code savedTurns} × 90° were saved to {@code file} (#51). Back on it before the save ended, the old file is on
+     * screen: it is loaded again (the cache sees the new change time). Turned again meanwhile, it stays as it is on
+     * screen: the reload keeps the turn the saved file doesn't hold yet, so the next save starts from the saved file
+     * (#73).
      */
-    public void rotationSaved(Path file) {
+    public void rotationSaved(Path file, int savedTurns) {
         if (images != null && !images.isEmpty() && images.current().equals(file) && shown != null
-                && shownRequest == request && turns == 0) {
+                && shownRequest == request) {
+            turnsOnReload = turns == 0 ? 0 : turns - savedTurns;
             showCurrent();
         }
     }
@@ -676,13 +681,15 @@ public final class ViewerController<I> {
         // The new request is current before loading starts, so a result that arrives at once is accepted and a
         // late one for the previous image is ignored.
         long id = ++request;
+        int keepTurns = turnsOnReload;   // only this load gets them; a later one starts upright as its file says
+        turnsOnReload = 0;
         Runnable previous = cancel;
-        cancel = source.load(file, resolutionForMode(), result -> loaded(id, file, result));
+        cancel = source.load(file, resolutionForMode(), result -> loaded(id, file, result, keepTurns));
         previous.run();   // stop decoding an image no longer wanted (fast key presses)
         source.preload(images.upcoming(forward, PRELOAD_AHEAD, PRELOAD_BEHIND), resolutionForMode());
     }
 
-    private void loaded(long id, Path file, Loaded<I> result) {
+    private void loaded(long id, Path file, Loaded<I> result, int keepTurns) {
         if (id != request) {
             return;
         }
@@ -697,9 +704,9 @@ public final class ViewerController<I> {
                     : "Can't show " + file.getFileName() + ": the file is damaged or not a supported image");
             return;
         }
-        shown = result;
+        shown = result.rotated(keepTurns);
         shownRequest = id;
-        turns = 0;
+        turns = keepTurns;
         if (lockFromFit) {
             lockFromFit = false;
             lockFitRequest = id;

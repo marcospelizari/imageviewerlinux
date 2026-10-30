@@ -358,7 +358,7 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
             Platform.runLater(() -> {
                 if (problem == null) {
                     strip.refresh();   // visible thumbnails are asked for again: the saved one is made anew
-                    controller.rotationSaved(file);
+                    controller.rotationSaved(file, quarterTurns);
                 } else {
                     showProblem("Save rotation", "Can't save the rotation of " + file.getFileName() + ":\n"
                             + problem.getMessage() + "\n\nThe file was not changed.");

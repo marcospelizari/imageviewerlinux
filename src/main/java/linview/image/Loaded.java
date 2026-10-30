@@ -77,9 +77,12 @@ public record Loaded<I>(I image, double width, double height, Orientation orient
         return isFailed() ? this : new Loaded<>(image, width, height, orientation, resolution, 0, true, stamp);
     }
 
-    /** {@code full} in place of this screen-size copy (#22), keeping this one's orientation, e.g. a rotation. */
+    /**
+     * {@code full} in place of this screen-size copy (#22), keeping this one's orientation, e.g. a rotation. The file
+     * state is {@code full}'s, since the pixels are (#74): a file replaced in between by one of the same size.
+     */
     public Loaded<I> withImage(Loaded<I> full) {
-        return new Loaded<>(full.image, width, height, orientation, full.resolution, loadMillis, cached, stamp);
+        return new Loaded<>(full.image, width, height, orientation, full.resolution, loadMillis, cached, full.stamp);
     }
 
     /** The same result with the file's state when loading began. */
