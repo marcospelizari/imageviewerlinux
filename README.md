@@ -2,7 +2,7 @@
 
 A fast image viewer for Linux, inspired by FastStone Image Viewer.
 
-**Status:** early development (0.3.0). It opens a folder, moves through its images quickly (preloading and a memory-limited cache), zooms (also at the mouse pointer) with zoom lock, and drags large images. Full-screen has a thumbnail strip at the top, a taskbar at the bottom-left, a position overlay and a magnifier.
+**Status:** 1.0.0, the first release for daily use. It opens a folder, moves through its images quickly (preloading and a memory-limited cache), zooms (also at the mouse pointer) with zoom lock, and drags large images. Full-screen has a thumbnail strip at the top, a taskbar at the bottom-left, a position overlay and a magnifier. Del moves an image to the Trash, a turn can be saved to the file, and F12 opens the settings.
 
 ## What works now
 - Open an image or a folder from the command line, or with Ctrl+O. Opening an image makes its folder the list.
@@ -30,7 +30,8 @@ A fast image viewer for Linux, inspired by FastStone Image Viewer.
 | 0.1 | Core viewer: open a file or folder, natural sort, next/previous, zoom modes and zoom lock, formats JPEG, PNG, GIF, BMP, WebP, TIFF, PSD, TGA, EXIF rotation, settings file |
 | 0.2 | Speed: background loading at screen size, preloading, memory-limited cache |
 | 0.3 | Full-screen: thumbnail strip on top, toolbar at the bottom, file name overlay, magnifier |
-| 1.0 | Delete to Trash, copy/move to favourite folders, FastStone-style shortcuts, "Open with" in file managers, installer |
+| 1.0 | Delete to Trash, save a turn to the file, settings window, right-click menu, FastStone-style shortcuts, "Open with" in file managers, installer |
+| 1.x | Copy/move to favourite folders, faster very large images |
 
 Later versions may add camera RAW/HEIC, a browser mode, editing and batch tools.
 
