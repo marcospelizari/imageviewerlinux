@@ -62,6 +62,15 @@ class LoadedTest {
         assertEquals(80, swapped.loadMillis());
     }
 
+    /** #74: the pixels come from the full image, so its file state does too (a same-size replacement in between). */
+    @Test
+    void withImageTakesTheFullImagesStamp() {
+        Loaded<String> copy = new Loaded<>("copy", 6000, 4000, Orientation.UPRIGHT, 0.25, 80).stamped("v1");
+        Loaded<String> full = new Loaded<>("full", 6000, 4000, Orientation.UPRIGHT, 1, 400).stamped("v2");
+
+        assertEquals("v2", copy.withImage(full).stamp());
+    }
+
     /** #20: too large is a failure that keeps the real size, for the message. */
     @Test
     void tooLargeIsAFailureWithItsSize() {

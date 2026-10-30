@@ -2,6 +2,13 @@
 
 All notable changes are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [1.0.1] - 2026-10-30
+### Fixed
+- Saving a rotation keeps the file's owner, group and ACL (extended permissions), not only its mode bits: before, the saved file could give its group more access than the original. If they can't be kept (e.g. a file owned by someone else), linview says so and the file stays as it was (#71)
+- `install.sh` copies the new version completely before replacing the old one: a failed update (disk full, broken archive) leaves the installed version working (#72)
+- Back on a turned image before its save ended and turned again: the image keeps what is on screen, and leaving it saves the new turn on top of the saved one; before, that save was refused as "the file changed since it was shown" (#73)
+- After another program replaced a file with one of the same size, zooming to actual size no longer keeps the old file's state, so saving a rotation works (#74)
+
 ## [1.0.0] - 2026-10-30 - Phase 5, first daily-use release
 ### Added
 - Del moves the image to the Trash: linview asks "Move … to the Trash?" (Enter moves it, Esc cancels), then shows the next image, or the previous one after the last; after the folder's only image it says the folder is empty. It works for a damaged file too, and does nothing while the next image is still loading, so it always takes the image the question names. The desktop's `gio trash` does the move, so a file on a USB drive goes to that drive's Trash and the file manager shows it. If the Trash can't take the file, or `gio` is missing, linview says why and the file stays: it never deletes permanently (#34)

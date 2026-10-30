@@ -5,6 +5,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -113,12 +114,15 @@ public final class FileActions {
         replace(target, saved, before);
     }
 
-    /** {@code target}'s content replaced by {@code content} in one step, with its permissions and modified date. */
+    /**
+     * {@code target}'s content replaced by {@code content} in one step, with its owner, group, permissions (ACL
+     * included) and modified date.
+     */
     private static void replace(Path target, byte[] content, FileStamp before) throws IOException {
         Path temporary = Files.createTempFile(target.getParent(), "." + target.getFileName() + ".", ".linview");
         try {
             Files.write(temporary, content);
-            Files.setPosixFilePermissions(temporary, Files.getPosixFilePermissions(target));
+            copyAccess(target, temporary);
             Files.setLastModifiedTime(temporary, before.modified());
             if (!before.equals(FileStamp.of(target))) {
                 throw new IOException("the file changed while saving");
@@ -126,6 +130,32 @@ public final class FileActions {
             Files.move(temporary, target, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } finally {
             Files.deleteIfExists(temporary);
+        }
+    }
+
+    /**
+     * Gives {@code copy} the owner, group and permissions of {@code original}, ACL included (#71): Java can't read a
+     * POSIX ACL, coreutils' {@code cp} copies it with the mode. Throws if any of them can't be kept, e.g. a file owned
+     * by someone else: the replacement would otherwise give others more (or less) access than before.
+     */
+    private static void copyAccess(Path original, Path copy) throws IOException {
+        List<String> command = List.of("cp", "--attributes-only", "--preserve=mode,ownership", "--",
+                original.toString(), copy.toString());
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+        int exit;
+        try {
+            exit = process.waitFor();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while saving", e);
+        }
+        PosixFileAttributes was = Files.readAttributes(original, PosixFileAttributes.class);
+        PosixFileAttributes now = Files.readAttributes(copy, PosixFileAttributes.class);
+        if (exit != 0 || !was.owner().equals(now.owner()) || !was.group().equals(now.group())
+                || !was.permissions().equals(now.permissions())) {
+            throw new IOException("the file's owner or permissions can't be kept"
+                    + (output.isEmpty() ? "" : ": " + output));
         }
     }
 

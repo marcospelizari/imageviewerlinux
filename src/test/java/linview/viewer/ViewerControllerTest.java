@@ -1018,11 +1018,35 @@ class ViewerControllerTest {
         controller.open(folder);
         lastLoad().finish(800, 600);
         int loadsBefore = loads.size();
-        controller.rotationSaved(folder.resolve("b.jpg"));   // not on screen
+        controller.rotationSaved(folder.resolve("b.jpg"), 1);   // not on screen
         assertEquals(loadsBefore, loads.size());
-        controller.rotationSaved(folder.resolve("a.jpg"));
+        controller.rotationSaved(folder.resolve("a.jpg"), 1);
         assertEquals(loadsBefore + 1, loads.size());
         assertEquals(folder.resolve("a.jpg"), lastLoad().file());
+    }
+
+    /**
+     * #73: back on the image before its save ended and turned again: the reload keeps what is on screen, and the next
+     * save starts from the saved file (its state and orientation), so it isn't refused as changed.
+     */
+    @Test
+    void aTurnMadeBeforeTheSaveEndedIsSavedOnTopOfIt() {
+        rotationAnswer = new ViewerController.RotationAnswer(true, false);
+        controller.open(folder);
+        lastLoad().done().accept(new Loaded<>("a.jpg", 800, 600, Orientation.UPRIGHT).stamped("v1"));
+        controller.rotateRight();
+        controller.next();                   // a.jpg +1 is being saved
+        lastLoad().finish(800, 600);
+        controller.previous();               // back before the save ended: the old file
+        lastLoad().done().accept(new Loaded<>("a.jpg", 800, 600, Orientation.UPRIGHT).stamped("v1"));
+        controller.rotateRight();
+        controller.rotateRight();            // 180° on screen
+        controller.rotationSaved(folder.resolve("a.jpg"), 1);
+        lastLoad().done().accept(new Loaded<>("a.jpg", 800, 600, Orientation.UPRIGHT.rotated(1)).stamped("v2"));
+
+        controller.next();
+        assertEquals(List.of("v1", "v2"), savedStamps);
+        assertEquals("a.jpg 90°  800×600 +1", saves.get(1));   // the saved 90°, one more turn: 180° as on screen
     }
 
     /** #26: closing remembers the mode and the window; a window smaller than allowed is saved at the minimum. */

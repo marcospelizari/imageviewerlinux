@@ -22,7 +22,7 @@ refresh() {
 }
 
 if [ "${1:-}" = "--uninstall" ]; then
-    rm -rf "$app" "$data/applications/linview.desktop"
+    rm -rf "$app" "$app.new" "$app.old" "$data/applications/linview.desktop"
     for size in $sizes; do
         rm -f "$data/icons/hicolor/${size}x${size}/apps/linview.png"
     done
@@ -36,9 +36,25 @@ if [ ! -x "$here/linview/bin/linview" ]; then
     exit 1
 fi
 
-rm -rf "$app"   # a new version replaces the old one completely
+# A new version replaces the old one completely, but only once it is fully copied (#72): a failed copy (disk full,
+# broken archive) leaves the old version working.
 mkdir -p "$data"
-cp -R "$here/linview" "$app"
+rm -rf "$app.new" "$app.old"   # left over from an interrupted run
+if ! cp -R "$here/linview" "$app.new"; then
+    rm -rf "$app.new"
+    echo "Copying linview failed; the installed version, if any, is unchanged." >&2
+    exit 1
+fi
+if [ -e "$app" ]; then
+    mv "$app" "$app.old"
+fi
+if ! mv "$app.new" "$app"; then
+    if [ -e "$app.old" ]; then mv "$app.old" "$app"; fi
+    rm -rf "$app.new"
+    echo "Replacing linview failed; the installed version is unchanged." >&2
+    exit 1
+fi
+rm -rf "$app.old"
 for size in $sizes; do
     mkdir -p "$data/icons/hicolor/${size}x${size}/apps"
     cp "$here/icons/linview-$size.png" "$data/icons/hicolor/${size}x${size}/apps/linview.png"
