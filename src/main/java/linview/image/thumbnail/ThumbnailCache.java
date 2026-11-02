@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -16,9 +17,12 @@ import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 import java.util.zip.CRC32;
 
 import javax.imageio.ImageIO;
+
+import linview.Platform;
 
 /**
  * The freedesktop thumbnail cache (Thumbnail Managing Standard), shared with file managers such as Dolphin (#28):
@@ -41,11 +45,21 @@ final class ThumbnailCache {
         this.large = thumbnails.resolve("large");
     }
 
-    /** {@code $XDG_CACHE_HOME/thumbnails}, by default {@code ~/.cache/thumbnails}. */
+    /**
+     * {@code $XDG_CACHE_HOME/thumbnails}, by default {@code ~/.cache/thumbnails}. On Windows, where no file manager
+     * shares it, linview's own {@code %LOCALAPPDATA%\linview\thumbnails} in the same format (#78).
+     */
     static Path defaultFolder() {
-        String cache = System.getenv("XDG_CACHE_HOME");
-        Path root = cache != null && !cache.isBlank()
-                ? Path.of(cache) : Path.of(System.getProperty("user.home"), ".cache");
+        return defaultFolder(Platform.windows(), System::getenv, System.getProperty("user.home"));
+    }
+
+    static Path defaultFolder(boolean windows, Function<String, String> env, String home) {
+        String cache = env.apply(windows ? "LOCALAPPDATA" : "XDG_CACHE_HOME");
+        if (windows) {
+            Path local = cache != null && !cache.isBlank() ? Path.of(cache) : Path.of(home, "AppData", "Local");
+            return local.resolve("linview").resolve("thumbnails");
+        }
+        Path root = cache != null && !cache.isBlank() ? Path.of(cache) : Path.of(home, ".cache");
         return root.resolve("thumbnails");
     }
 
@@ -104,17 +118,22 @@ final class ThumbnailCache {
                 "Thumb::MTime", String.valueOf(modifiedSeconds),
                 "Software", "linview"));
         if (!Files.isDirectory(large)) {
-            Files.createDirectories(large,
-                    PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
+            Files.createDirectories(large, ownerOnly("rwx------"));
         }
-        Path temporary = Files.createTempFile(large, "linview-", ".png",
-                PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
+        Path temporary = Files.createTempFile(large, "linview-", ".png", ownerOnly("rw-------"));
         try {
             Files.write(temporary, tagged);
             Files.move(temporary, pathFor(file), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         } finally {
             Files.deleteIfExists(temporary);
         }
+    }
+
+    /** {@code mode} where the file system has POSIX modes; on Windows the folder in the user's profile is private. */
+    private FileAttribute<?>[] ownerOnly(String mode) {
+        return large.getFileSystem().supportedFileAttributeViews().contains("posix")
+                ? new FileAttribute<?>[] {PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString(mode))}
+                : new FileAttribute<?>[0];
     }
 
     /** The {@code tEXt} chunks of a PNG, read up to the first image data; empty if it isn't a PNG. */

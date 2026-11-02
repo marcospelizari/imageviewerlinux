@@ -42,6 +42,44 @@ test:
     reports:
       junit: build/test-results/test/TEST-*.xml
 
+# The tests on Windows (#77, #78), on GitLab's hosted Windows runner. It uses CI minutes faster, so it runs by hand on
+# branches and merge requests (start it before merging Windows-related work) and by itself on `v*` tags.
+test-windows:
+  stage: test
+  tags:
+    - saas-windows-medium-amd64
+  needs: []
+  rules:
+    - if: $CI_COMMIT_TAG =~ /^v[0-9]/
+    - if: $CI_COMMIT_BRANCH
+      when: manual
+      allow_failure: true
+  cache:
+    key:
+      prefix: windows
+      files:
+        - gradle/wrapper/gradle-wrapper.properties
+        - build.gradle
+    paths:
+      - .gradle/caches/
+      - .gradle/wrapper/
+  before_script:
+    # The runner's own Java, for the spike's record; through cmd, so its stderr doesn't stop PowerShell.
+    - cmd /c "java -version 2>&1"; Write-Host "runner Java exit code $LASTEXITCODE"
+    - choco install temurin21 -y --no-progress --limit-output
+    - $env:JAVA_HOME = (Get-ChildItem "C:\Program Files\Eclipse Adoptium" -Directory -Filter "jdk-21*" | Select-Object -First 1).FullName
+    - $env:Path = "$env:JAVA_HOME\bin;$env:Path"
+    - cmd /c "java -version 2>&1"
+  script:
+    - .\gradlew.bat test --console=plain
+  artifacts:
+    when: always
+    expire_in: 1 week
+    paths:
+      - build/reports/tests/test/
+    reports:
+      junit: build/test-results/test/TEST-*.xml
+
 # The Linux release archive (#61): build/release/linview-<version>-linux-x64.tar.gz, the app image with its own Java
 # runtime (Temurin bundles its native libraries), the .desktop file, icons and install.sh. On a `v*` tag it must match
 # `version` in build.gradle and goes to the package registry; on a branch it can be started by hand to try it.

@@ -382,6 +382,8 @@ public final class ViewerWindow implements ViewerController.Display<Image> {
         // Folders too, without a DirectoryChooser: in this (GTK) dialog a folder can be chosen and opened as well as
         // an image. Checked by Marcos on 2026-10-23 (#50, closed without code; review finding R8 withdrawn), so no
         // separate folder dialog or Ctrl+Shift+O is needed. Raised again in a review on 2026-10-25: still settled.
+        // Windows' dialog opens files only; that's accepted (Marcos, 2026-11-02, #70): a file opens its folder, and
+        // folders open from Explorer or the command line.
         File chosen = chooser.showOpenDialog(stage);
         if (chosen != null) {
             controller.open(chosen.toPath());

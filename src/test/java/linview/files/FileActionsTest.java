@@ -8,21 +8,32 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeFalse;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+import java.awt.Desktop;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.AclEntry;
+import java.nio.file.attribute.AclEntryPermission;
+import java.nio.file.attribute.AclEntryType;
+import java.nio.file.attribute.AclFileAttributeView;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.GroupPrincipal;
 import java.nio.file.attribute.PosixFileAttributes;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.nio.file.attribute.UserPrincipal;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnOs;
+import org.junit.jupiter.api.condition.EnabledOnOs;
+import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.imageio.ImageIO;
@@ -52,6 +63,7 @@ class FileActionsTest {
     }
 
     @Test
+    @DisabledOnOs(OS.WINDOWS)   // the stand-in needs sh
     void trashFailureKeepsTheFileAndSaysWhy() throws IOException {
         Path file = Files.writeString(folder.resolve("a.jpg"), "image");
         // Stands in for gio when the Trash can't take the file; the path arrives as $0.
@@ -93,7 +105,32 @@ class FileActionsTest {
     }
 
     private static boolean onPath(String tool) {
-        return Stream.of(System.getenv("PATH").split(":")).anyMatch(dir -> Files.isExecutable(Path.of(dir, tool)));
+        return Stream.of(System.getenv("PATH").split(File.pathSeparator)).anyMatch(dir -> Files.isExecutable(Path.of(dir, tool)));
+    }
+
+    /** #78: Windows refuses the Trash on a drive whose root has no {@code $Recycle.Bin} (R5). */
+    @Test
+    void aDriveWithoutRecycleBinIsRecognised() throws IOException {
+        assertFalse(FileActions.hasRecycleBin(folder));
+        assertFalse(FileActions.hasRecycleBin(null));
+        Files.createDirectory(folder.resolve("$Recycle.Bin"));
+        assertTrue(FileActions.hasRecycleBin(folder));
+    }
+
+    /** #78: the real Recycle Bin on the Windows CI runner; the temporary folder is on the system drive. */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void windowsMovesTheFileToTheRecycleBin() throws IOException {
+        assumeTrue(Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.MOVE_TO_TRASH),
+                "no desktop to trash with");
+        Path file = Files.writeString(folder.resolve("name with spaces, ação.jpg"), "image");
+        new FileActions().trash(file);
+        assertFalse(Files.exists(file));
+        assertThrows(IOException.class, () -> new FileActions().trash(file));   // gone: refused, nothing else
+    }
+
+    private static boolean posix(Path file) {
+        return file.getFileSystem().supportedFileAttributeViews().contains("posix");
     }
 
     private static final FileTime LAST_YEAR = FileTime.from(Instant.parse("2025-06-01T10:00:00Z"));
@@ -102,7 +139,9 @@ class FileActionsTest {
     private Path image(String name, String format) throws IOException {
         Path file = folder.resolve(name);
         ImageIO.write(new BufferedImage(30, 20, BufferedImage.TYPE_INT_RGB), format, file.toFile());
-        Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-r-----"));
+        if (posix(file)) {
+            Files.setPosixFilePermissions(file, PosixFilePermissions.fromString("rw-r-----"));
+        }
         Files.setLastModifiedTime(file, LAST_YEAR);
         return file;
     }
@@ -113,7 +152,9 @@ class FileActionsTest {
         new FileActions().saveRotation(jpeg, FileStamp.of(jpeg), Orientation.UPRIGHT, 30, 20, 1);
         assertEquals(6, ImageHeader.read(jpeg).orientation().exifValue());
         assertEquals(LAST_YEAR, Files.getLastModifiedTime(jpeg));
-        assertEquals("rw-r-----", PosixFilePermissions.toString(Files.getPosixFilePermissions(jpeg)));
+        if (posix(jpeg)) {
+            assertEquals("rw-r-----", PosixFilePermissions.toString(Files.getPosixFilePermissions(jpeg)));
+        }
 
         Path png = image("b.png", "png");
         new FileActions().saveRotation(png, FileStamp.of(png), Orientation.UPRIGHT, 30, 20, 3);
@@ -128,6 +169,7 @@ class FileActionsTest {
     @Test
     void savedRotationKeepsTheGroup() throws IOException {
         Path jpeg = image("a.jpg", "jpg");
+        assumeTrue(posix(jpeg), "no POSIX groups");
         GroupPrincipal own = Files.readAttributes(jpeg, PosixFileAttributes.class).group();
         GroupPrincipal other = null;
         for (String name : List.of("adm", "users", "wheel", "daemon")) {
@@ -176,6 +218,28 @@ class FileActionsTest {
         return acl;
     }
 
+    /** #78: on Windows an ACL entry added to the file stays after a save, as does the owner. */
+    @Test
+    @EnabledOnOs(OS.WINDOWS)
+    void savedRotationKeepsTheWindowsAcl() throws IOException {
+        Path png = image("b.png", "png");
+        AclFileAttributeView view = Files.getFileAttributeView(png, AclFileAttributeView.class);
+        assumeTrue(Files.getFileStore(png).supportsFileAttributeView(AclFileAttributeView.class), "no ACLs here");
+        UserPrincipal everyone = png.getFileSystem().getUserPrincipalLookupService().lookupPrincipalByName("Everyone");
+        List<AclEntry> acl = new ArrayList<>(view.getAcl());
+        acl.add(0, AclEntry.newBuilder().setType(AclEntryType.ALLOW).setPrincipal(everyone)
+                .setPermissions(AclEntryPermission.READ_DATA).build());
+        view.setAcl(acl);
+        List<AclEntry> before = view.getAcl();
+        UserPrincipal owner = view.getOwner();
+
+        new FileActions().saveRotation(png, FileStamp.of(png), Orientation.UPRIGHT, 30, 20, 1);
+        AclFileAttributeView saved = Files.getFileAttributeView(png, AclFileAttributeView.class);
+        assertEquals(before, saved.getAcl());
+        assertEquals(owner, saved.getOwner());
+        assertEquals(20, ImageHeader.read(png).width());
+    }
+
     /** The file isn't the image that was shown any more (another program changed it): nothing is written. */
     @Test
     void aChangedFileIsNotSaved() throws IOException {
@@ -213,7 +277,11 @@ class FileActionsTest {
     @Test
     void aReadOnlyFileIsRefused() throws IOException {
         Path locked = image("a.jpg", "jpg");
-        Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("r--r-----"));
+        if (posix(locked)) {
+            Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("r--r-----"));
+        } else {
+            Files.setAttribute(locked, "dos:readonly", true);   // Windows
+        }
         assumeFalse(Files.isWritable(locked), "running as root");
         byte[] before = Files.readAllBytes(locked);
         IOException e = assertThrows(IOException.class,

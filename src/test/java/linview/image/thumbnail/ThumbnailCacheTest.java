@@ -76,7 +76,9 @@ class ThumbnailCacheTest {
         Path found = cache.find(photo, 1_700_000_000L);
         assertNotNull(found);
         assertEquals(home.resolve("thumbnails/large/" + ThumbnailCache.md5(ThumbnailCache.uri(photo)) + ".png"), found);
-        assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(found)));
+        if (found.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+            assertEquals("rw-------", PosixFilePermissions.toString(Files.getPosixFilePermissions(found)));
+        }
         assertNull(cache.find(photo, 1_700_000_001L));   // the file changed since
         assertNull(cache.find(home.resolve("other.jpg"), 1_700_000_000L));
         try (var left = Files.list(found.getParent())) {
@@ -88,5 +90,19 @@ class ThumbnailCacheTest {
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         ImageIO.write(new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB), "png", out);
         return out.toByteArray();
+    }
+
+    /** #78: Linux uses the shared freedesktop cache; Windows linview's own folder in %LOCALAPPDATA%. */
+    @Test
+    void defaultFolderFollowsThePlatform() {
+        String set = home.toString();
+        Path user = Path.of("user");
+        assertEquals(home.resolve("thumbnails"),
+                ThumbnailCache.defaultFolder(false, name -> name.equals("XDG_CACHE_HOME") ? set : null, "user"));
+        assertEquals(user.resolve(".cache/thumbnails"), ThumbnailCache.defaultFolder(false, name -> null, "user"));
+        assertEquals(home.resolve("linview/thumbnails"),
+                ThumbnailCache.defaultFolder(true, name -> name.equals("LOCALAPPDATA") ? set : null, "user"));
+        assertEquals(user.resolve("AppData/Local/linview/thumbnails"),
+                ThumbnailCache.defaultFolder(true, name -> null, "user"));
     }
 }
