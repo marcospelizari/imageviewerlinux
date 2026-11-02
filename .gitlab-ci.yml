@@ -42,8 +42,10 @@ test:
     reports:
       junit: build/test-results/test/TEST-*.xml
 
-# The tests on Windows (#77, #78), on GitLab's hosted Windows runner. It uses CI minutes faster, so it runs by hand on
-# branches and merge requests (start it before merging Windows-related work) and by itself on `v*` tags.
+# The tests on Windows (#77, #78), on GitLab's hosted Windows runner. It uses CI minutes faster, so it runs by hand in
+# branch pipelines (a merge request shows its branch's pipeline: start it there before merging Windows-related work)
+# and by itself on `v*` tags. This project has no merge-request pipelines (no `workflow:` rules); a
+# merge_request_event rule here would add one holding only this optional job, which would count as passed.
 test-windows:
   stage: test
   tags:

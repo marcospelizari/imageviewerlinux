@@ -25,16 +25,19 @@ class ThumbnailCacheTest {
     @TempDir
     Path home;
 
+    /** {@code file:///} on Linux, {@code file:///C:/} on Windows (#78): where an absolute path's URI starts. */
+    private static final String ROOT = Path.of("/").toAbsolutePath().toUri().toASCIIString();
+
     /** The example in the Thumbnail Managing Standard. */
     @Test
     void theFileNameIsTheMd5OfTheUri() {
         assertEquals("c6ee772d9e49320e97ec29a7eb5b1697", ThumbnailCache.md5("file:///home/jens/photos/me.png"));
-        assertEquals("file:///home/jens/photos/me.png", ThumbnailCache.uri(Path.of("/home/jens/photos/me.png")));
+        assertEquals(ROOT + "home/jens/photos/me.png", ThumbnailCache.uri(Path.of("/home/jens/photos/me.png")));
     }
 
     @Test
     void spacesAndAccentsAreEscapedInTheUri() {
-        assertEquals("file:///pics/F%C3%A9rias%202026/a.jpg", ThumbnailCache.uri(Path.of("/pics/Férias 2026/a.jpg")));
+        assertEquals(ROOT + "pics/F%C3%A9rias%202026/a.jpg", ThumbnailCache.uri(Path.of("/pics/Férias 2026/a.jpg")));
     }
 
     @Test
