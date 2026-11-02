@@ -1,15 +1,19 @@
 package linview.files;
 
+import java.awt.Desktop;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.AclFileAttributeView;
 import java.nio.file.attribute.PosixFileAttributes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
+import linview.Platform;
 import linview.image.FileStamp;
 import linview.image.ImageHeader;
 import linview.image.Orientation;
@@ -22,25 +26,34 @@ import linview.image.Orientation;
  */
 public final class FileActions {
 
-    /**
-     * The desktop's own tool (Marcos, 2026-10-26): it follows the freedesktop Trash rules, including a drive's own
-     * {@code .Trash-$UID} for files on a USB drive, so Dolphin shows them. Linux only; Windows / macOS would use
-     * {@code Desktop.moveToTrash} when such a build is planned.
-     */
     /** Formats a rotation can be saved to (#51): JPEG through its EXIF tag, PNG and BMP written again. */
     private static final List<String> ROTATION_FORMATS = List.of("jpg", "jpeg", "png", "bmp");
 
+    /**
+     * On Linux the desktop's own tool (Marcos, 2026-10-26): it follows the freedesktop Trash rules, including a
+     * drive's own {@code .Trash-$UID} for files on a USB drive, so Dolphin shows them. Windows: {@link #recycle}.
+     */
     private static final List<String> GIO_TRASH = List.of("gio", "trash", "--");
 
-    private final List<String> trashCommand;
+    /** Moves one file to the Trash, or throws with a message for the user and leaves it where it was. */
+    @FunctionalInterface
+    interface Trash {
+        void move(Path file) throws IOException;
+    }
+
+    private final Trash trash;
 
     public FileActions() {
-        this(GIO_TRASH);
+        this(Platform.windows() ? FileActions::recycle : command(GIO_TRASH));
     }
 
     /** {@code trashCommand} gets the file's absolute path appended; tests use a stand-in. */
     FileActions(List<String> trashCommand) {
-        this.trashCommand = List.copyOf(trashCommand);
+        this(command(trashCommand));
+    }
+
+    private FileActions(Trash trash) {
+        this.trash = trash;
     }
 
     /**
@@ -49,25 +62,57 @@ public final class FileActions {
      * @throws IOException with a message for the user; the file is then where it was
      */
     public void trash(Path file) throws IOException {
-        List<String> command = new ArrayList<>(trashCommand);
-        command.add(file.toAbsolutePath().toString());   // absolute, so gio never reads the name as a URI
-        Process process;
-        try {
-            process = new ProcessBuilder(command).redirectErrorStream(true).start();
-        } catch (IOException e) {
-            throw new IOException("The Trash isn't available: " + trashCommand.get(0) + " was not found", e);
+        trash.move(file);
+    }
+
+    private static Trash command(List<String> trashCommand) {
+        List<String> tool = List.copyOf(trashCommand);
+        return file -> {
+            List<String> command = new ArrayList<>(tool);
+            command.add(file.toAbsolutePath().toString());   // absolute, so gio never reads the name as a URI
+            Process process;
+            try {
+                process = new ProcessBuilder(command).redirectErrorStream(true).start();
+            } catch (IOException e) {
+                throw new IOException("The Trash isn't available: " + tool.get(0) + " was not found", e);
+            }
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
+            int exit;
+            try {
+                exit = process.waitFor();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted while moving to the Trash", e);
+            }
+            if (exit != 0) {
+                throw new IOException(output.isEmpty() ? tool.get(0) + " failed (exit " + exit + ")" : output);
+            }
+        };
+    }
+
+    /**
+     * Windows (#78): the Recycle Bin through {@code Desktop.moveToTrash}. Refused on a drive without a Recycle Bin
+     * (some USB drives, network shares): there the shell deletes the file for good instead (R5).
+     */
+    static void recycle(Path file) throws IOException {
+        Path absolute = file.toAbsolutePath();
+        if (!Files.exists(absolute, LinkOption.NOFOLLOW_LINKS)) {
+            throw new IOException("The file is gone");
         }
-        String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8).strip();
-        int exit;
-        try {
-            exit = process.waitFor();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("Interrupted while moving to the Trash", e);
+        if (!hasRecycleBin(absolute.getRoot())) {
+            throw new IOException("This drive has no Recycle Bin, so the file was not deleted");
         }
-        if (exit != 0) {
-            throw new IOException(output.isEmpty() ? trashCommand.get(0) + " failed (exit " + exit + ")" : output);
+        if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.MOVE_TO_TRASH)) {
+            throw new IOException("The Recycle Bin isn't available");
         }
+        if (!Desktop.getDesktop().moveToTrash(absolute.toFile())) {
+            throw new IOException("The Recycle Bin can't take the file");
+        }
+    }
+
+    /** Whether the drive with this {@code root} has a Recycle Bin: Windows keeps it in {@code $Recycle.Bin} there. */
+    static boolean hasRecycleBin(Path root) {
+        return root != null && Files.isDirectory(root.resolve("$Recycle.Bin"));
     }
 
     /** Whether {@link #saveRotation} can write {@code file}'s format; other formats keep a rotation in the view only. */
@@ -116,7 +161,7 @@ public final class FileActions {
 
     /**
      * {@code target}'s content replaced by {@code content} in one step, with its owner, group, permissions (ACL
-     * included) and modified date.
+     * included; on Windows owner and ACL) and modified date.
      */
     private static void replace(Path target, byte[] content, FileStamp before) throws IOException {
         Path temporary = Files.createTempFile(target.getParent(), "." + target.getFileName() + ".", ".linview");
@@ -139,6 +184,10 @@ public final class FileActions {
      * by someone else: the replacement would otherwise give others more (or less) access than before.
      */
     private static void copyAccess(Path original, Path copy) throws IOException {
+        if (Platform.windows()) {
+            copyAcl(original, copy);
+            return;
+        }
         List<String> command = List.of("cp", "--attributes-only", "--preserve=mode,ownership", "--",
                 original.toString(), copy.toString());
         Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
@@ -156,6 +205,32 @@ public final class FileActions {
                 || !was.permissions().equals(now.permissions())) {
             throw new IOException("the file's owner or permissions can't be kept"
                     + (output.isEmpty() ? "" : ": " + output));
+        }
+    }
+
+    /**
+     * Windows (#78): gives {@code copy} the owner and ACL of {@code original}. The copy, made in the same folder,
+     * usually inherits the same ACL already; only a differing one is written. A drive without access rights (FAT,
+     * exFAT) has nothing to keep. Throws if they can't be kept, e.g. a file owned by another account.
+     */
+    private static void copyAcl(Path original, Path copy) throws IOException {
+        if (!Files.getFileStore(original).supportsFileAttributeView(AclFileAttributeView.class)) {
+            return;
+        }
+        AclFileAttributeView was = Files.getFileAttributeView(original, AclFileAttributeView.class);
+        AclFileAttributeView now = Files.getFileAttributeView(copy, AclFileAttributeView.class);
+        try {
+            if (!was.getOwner().equals(now.getOwner())) {
+                now.setOwner(was.getOwner());
+            }
+            if (!was.getAcl().equals(now.getAcl())) {
+                now.setAcl(was.getAcl());
+            }
+        } catch (IOException e) {
+            throw new IOException("the file's owner or permissions can't be kept", e);
+        }
+        if (!was.getOwner().equals(now.getOwner()) || !was.getAcl().equals(now.getAcl())) {
+            throw new IOException("the file's owner or permissions can't be kept");
         }
     }
 

@@ -14,7 +14,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
+import linview.Platform;
 import linview.viewer.Zoom;
 
 /**
@@ -57,12 +59,19 @@ public final class SettingsStore {
         this.warn = warn;
     }
 
-    /** {@code $XDG_CONFIG_HOME/linview/settings.properties}, or under {@code ~/.config} when that isn't set. */
+    /**
+     * {@code $XDG_CONFIG_HOME/linview/settings.properties}, or under {@code ~/.config} when that isn't set; on Windows
+     * {@code %APPDATA%\linview\settings.properties} (#78).
+     */
     public static Path defaultFile() {
-        String xdg = System.getenv("XDG_CONFIG_HOME");
-        Path config = xdg != null && !xdg.isBlank() && Path.of(xdg).isAbsolute()
-                ? Path.of(xdg)
-                : Path.of(System.getProperty("user.home"), ".config");
+        return defaultFile(Platform.windows(), System::getenv, System.getProperty("user.home"));
+    }
+
+    static Path defaultFile(boolean windows, Function<String, String> env, String home) {
+        String set = env.apply(windows ? "APPDATA" : "XDG_CONFIG_HOME");
+        Path config = set != null && !set.isBlank() && Path.of(set).isAbsolute()
+                ? Path.of(set)
+                : windows ? Path.of(home, "AppData", "Roaming") : Path.of(home, ".config");
         return config.resolve("linview").resolve("settings.properties");
     }
 

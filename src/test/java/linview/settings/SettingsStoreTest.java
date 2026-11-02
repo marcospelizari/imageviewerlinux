@@ -254,4 +254,19 @@ class SettingsStoreTest {
         assertEquals(0, store.writes.get());
         assertFalse(Files.exists(folder.resolve("settings.properties")));
     }
+
+    /** #78: the settings folder, on Linux from XDG and on Windows from %APPDATA%; home-based when the variable isn't set. */
+    @Test
+    void defaultFileFollowsThePlatform(@TempDir Path folder) {
+        String set = folder.toString();
+        Path home = Path.of("home");
+        assertEquals(folder.resolve("linview/settings.properties"),
+                SettingsStore.defaultFile(false, name -> name.equals("XDG_CONFIG_HOME") ? set : null, "home"));
+        assertEquals(home.resolve(".config/linview/settings.properties"),
+                SettingsStore.defaultFile(false, name -> null, "home"));
+        assertEquals(folder.resolve("linview/settings.properties"),
+                SettingsStore.defaultFile(true, name -> name.equals("APPDATA") ? set : null, "home"));
+        assertEquals(home.resolve("AppData/Roaming/linview/settings.properties"),
+                SettingsStore.defaultFile(true, name -> name.equals("XDG_CONFIG_HOME") ? set : null, "home"));
+    }
 }

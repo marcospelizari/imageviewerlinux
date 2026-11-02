@@ -2,6 +2,11 @@
 
 All notable changes are recorded here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+### Added
+- Windows groundwork: the tests also run on a GitLab Windows runner (`test-windows`, started by hand on branches, by itself on release tags) (#77)
+- On Windows, Del moves the image to the Recycle Bin. On a drive without a Recycle Bin (some USB drives, network folders) linview says so and keeps the file, because Windows would otherwise delete it for good. Saving a rotation keeps the file's owner and access rights (ACL) there. Settings live in `%APPDATA%\linview`, thumbnails in `%LOCALAPPDATA%\linview\thumbnails`. Linux behaviour is unchanged (#78)
+
 ## [1.0.1] - 2026-10-30
 ### Fixed
 - Saving a rotation keeps the file's owner, group and ACL (extended permissions), not only its mode bits: before, the saved file could give its group more access than the original. If they can't be kept (e.g. a file owned by someone else), linview says so and the file stays as it was (#71)
