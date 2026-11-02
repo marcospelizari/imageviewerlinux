@@ -56,11 +56,10 @@ test-windows:
       allow_failure: true
   variables:
     # The runner's clone failed with "Unable to persist credentials with the 'wincredman' credential store": the
-    # image's Git Credential Manager can't save the job token in this non-interactive session. An empty
-    # credential.helper switches every helper off for this job's git, clone included; the token needs no storing.
-    GIT_CONFIG_COUNT: "1"
-    GIT_CONFIG_KEY_0: credential.helper
-    GIT_CONFIG_VALUE_0: ""
+    # image's Git Credential Manager can't use Windows' credential store in this non-interactive session. A plain
+    # file store works there; the VM is thrown away after the job and the job token expires with it. (An empty
+    # credential.helper through GIT_CONFIG_* doesn't work: Windows drops empty variables.)
+    GCM_CREDENTIAL_STORE: plaintext
   cache:
     key:
       prefix: windows
