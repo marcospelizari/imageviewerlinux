@@ -172,7 +172,7 @@ class SettingsStoreTest {
         assertTrue(save(s, file));
         String before = Files.readString(file);
 
-        assertTrue(folder.toFile().setWritable(false));
+        assumeTrue(folder.toFile().setWritable(false), "no read-only folders here (Windows)");
         boolean saved;
         try {
             saved = save(new Settings(), file);   // the folder is read-only: nothing may change
